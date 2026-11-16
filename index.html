@@ -7,205 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
-<style>
-/* Layout: 8-day overview strip (selector + nightly stay band) → selected day: rail map beside a day timeline → full booking reference at the end. */
-:root {
-  --paper: #f5f6f4;
-  --card: #ffffff;
-  --ink: #1d2124;
-  --muted: #61686d;
-  --rule: #dde1df;
-  --soft: #eef0ed;
-  --land: #eceee9;
-  --sea: #dce9ef;
-  --accent: #c8102e;
-  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
-  /* one line colour per day, rail-map style */
-  --d5: #8a6fd1; --d6: #f39700; --d7: #1d64c8; --d8: #3fa0e6;
-  --d9: #e0262e; --d10: #00a35a; --d11: #9b5b2e; --d12: #d1007f;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #15181a; --card: #1e2225; --ink: #eef0ee; --muted: #a2a9ad;
-    --rule: #30363a; --soft: #262b2e; --land: #22272a; --sea: #1a2a33; --accent: #ff5a6e;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --paper: #15181a; --card: #1e2225; --ink: #eef0ee; --muted: #a2a9ad;
-  --rule: #30363a; --soft: #262b2e; --land: #22272a; --sea: #1a2a33; --accent: #ff5a6e;
-  color-scheme: dark;
-}
-* { box-sizing: border-box; }
-body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
-.wrap {
-  max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px;
-  padding-block: 28px 64px;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
-}
-header { display: grid; gap: 4px; }
-.kicker { font-family: var(--font-mono); font-size: 13px; color: var(--muted); letter-spacing: .04em; }
-h1 { font-weight: 700; font-size: clamp(24px, 4vw, 34px); line-height: 1.25; margin: 0; text-wrap: balance; }
-h2 { font-weight: 700; font-size: 20px; margin: 0; text-wrap: balance; }
-.sec-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
-.hint { font-size: 13px; color: var(--muted); }
-button { font: inherit; color: inherit; }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-/* ── overview strip ── */
-.ov-scroll { overflow-x: auto; padding-bottom: 4px; }
-.ov { display: grid; grid-template-columns: repeat(8, minmax(84px, 1fr)); gap: 6px; min-width: 700px; }
-.ov-day {
-  grid-row: 1; display: grid; gap: 2px; align-content: start; text-align: left; cursor: pointer;
-  background: var(--card); border: 1px solid var(--rule); border-top: 5px solid var(--c);
-  border-radius: 10px; padding: 10px 10px 12px; min-height: 96px;
-  transition: transform .15s, box-shadow .15s;
-}
-.ov-day:hover { transform: translateY(-2px); }
-.ov-day[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--c); background: color-mix(in srgb, var(--c) 8%, var(--card)); }
-.ov-date { font-family: var(--font-mono); font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums; }
-.ov-date small { font-family: var(--font-body); font-weight: 500; color: var(--muted); font-size: 12px; margin-left: 4px; }
-.ov-title { font-size: 13px; font-weight: 500; line-height: 1.35; }
-.ov-stay {
-  grid-row: 2; font-size: 12px; font-weight: 500; text-align: center; white-space: nowrap;
-  background: var(--soft); border-radius: 6px; padding: 4px 6px; color: var(--ink);
-}
-.ov-stay.none { background: transparent; color: var(--muted); border: 1px dashed var(--rule); }
-.ov-label { grid-row: 3; grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
-/* ── day view ── */
-.d-body { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; align-items: start; }
-#d-main, #d-side { display: grid; gap: 14px; align-content: start; min-width: 0; }
-@media (max-width: 760px) { .d-body { grid-template-columns: 1fr; } }
-.mapbox { position: relative; background: var(--land); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; min-width: 0; }
-.map-head { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; pointer-events: none; }
-.map-head > * { pointer-events: auto; }
-.map-cap { font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--rule); border-radius: 999px; padding: 5px 12px; }
-.map-cap .sw { width: 22px; height: 6px; border-radius: 3px; background: var(--c); }
-.toggle { font-size: 13px; background: var(--card); border: 1px solid var(--rule); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
-.toggle[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
-svg.map { display: block; width: 100%; height: 320px; }
-@media (max-width: 600px) { svg.map { height: 280px; } }
-.land { fill: var(--land); }
-.sea { fill: var(--sea); }
-.sea-label { fill: var(--muted); font: italic 500 13px var(--font-body); opacity: .8; }
-.fuji-body { fill: var(--rule); }
-.fuji-snow { fill: var(--card); }
-.fuji-label { fill: var(--muted); font: 500 13px var(--font-body); }
-.leg { fill: none; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; transition: opacity .2s, stroke-width .2s; }
-.map.filtered .leg { opacity: .1; }
-.map.filtered .leg.on { opacity: 1; stroke-width: 8; }
-.st { transition: opacity .2s; }
-.map.filtered .st { opacity: .3; }
-.map.filtered .st.on { opacity: 1; }
-.stn, .stay { fill: var(--card); stroke: var(--ink); stroke-width: 2.5; }
-.stay-core { fill: var(--ink); }
-.lbl { fill: var(--ink); font: 700 15px var(--font-body); paint-order: stroke; stroke: var(--card); stroke-width: 4px; stroke-linejoin: round; }
-.lbl-sub { fill: var(--muted); font: 500 12px var(--font-body); paint-order: stroke; stroke: var(--card); stroke-width: 4px; stroke-linejoin: round; }
-.legend { position: absolute; left: 10px; bottom: 8px; display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); background: color-mix(in srgb, var(--card) 88%, transparent); border-radius: 8px; padding: 2px 8px; }
-.legend span { display: inline-flex; align-items: center; gap: 6px; }
-.daycard {
-  background: var(--card); border: 1px solid var(--rule); border-radius: 14px;
-  padding: 18px 20px 20px; display: grid; gap: 16px; min-width: 0;
-  border-top: 6px solid var(--c);
-}
-@media (max-width: 600px) { .daycard { padding: 14px 14px 16px; } }
-.d-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.d-meta { font-family: var(--font-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.d-date { font-family: var(--font-mono); font-weight: 600; font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.d-date small { font-family: var(--font-body); font-size: 16px; font-weight: 500; color: var(--muted); margin-left: 6px; }
-.d-title { font-size: 20px; font-weight: 700; line-height: 1.35; margin: 4px 0 0; text-wrap: balance; }
-.nav { display: flex; gap: 6px; flex-shrink: 0; }
-.nav button {
-  width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--rule); background: var(--card);
-  cursor: pointer; font-size: 18px; line-height: 1; display: grid; place-items: center;
-}
-.nav button:hover:not(:disabled) { border-color: var(--ink); }
-.nav button:disabled { opacity: .35; cursor: default; }
-.move { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; background: var(--soft); border-radius: 8px; padding: 8px 12px; justify-self: start; }
-.move b { font-size: 12px; font-weight: 500; color: var(--muted); }
-.tl { list-style: none; margin: 0; padding: 0; display: grid; }
-.tl li { display: grid; grid-template-columns: 56px 1fr; }
-.tl .t { font-family: var(--font-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 2px; }
-.tl .x { position: relative; border-left: 2px solid color-mix(in srgb, var(--c) 45%, transparent); padding: 0 0 14px 18px; font-size: 15px; }
-.tl li:last-child .x { border-left-color: transparent; padding-bottom: 0; }
-.tl .x::before {
-  content: ""; position: absolute; left: -7px; top: 7px; width: 12px; height: 12px; border-radius: 50%;
-  background: var(--card); border: 3px solid var(--c);
-}
-.pill { display: inline-block; font-size: 12px; color: var(--muted); border: 1px dashed var(--muted); border-radius: 999px; padding: 0 8px; margin-left: 6px; vertical-align: 1px; }
-.boxes { display: grid; gap: 10px; }
-.box { border: 1px solid var(--rule); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; }
-.box-h { font-size: 12px; color: var(--muted); letter-spacing: .04em; }
-.bk { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 14px; }
-.bk .kind { font-size: 12px; color: var(--muted); padding-top: 2px; }
-.bk .name { font-weight: 700; }
-.bk .sub { grid-column: 2; color: var(--muted); font-size: 13px; }
-.bk + .bk { border-top: 1px solid var(--rule); padding-top: 6px; }
-.night { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.night a { font-weight: 700; font-size: 16px; }
-.night span { font-size: 13px; color: var(--muted); }
-/* ── places added by the group: rows inside .tl + the add form ── */
-.tl li.added .x::before { background: var(--c); }
-.tl li.added .x { display: grid; gap: 1px; }
-.tl li.added a { font-weight: 700; justify-self: start; }
-.tl li.added a::after { content: " ↗"; font-weight: 500; font-size: 12px; }
-.tl .addr, .tl .by { font-size: 12px; color: var(--muted); }
-.tl .memo { font-size: 14px; }
-.tl .tl-note { display: block; font-size: 13px; color: var(--muted); padding-top: 8px; }
-.del { background: none; border: 0; padding: 0 0 0 6px; color: var(--muted); font-size: 12px; text-decoration: underline; cursor: pointer; }
-.del:hover { color: var(--accent); }
-.add { border: 1px dashed var(--rule); border-radius: 10px; }
-.add summary { cursor: pointer; padding: 9px 12px; font-size: 14px; font-weight: 500; color: var(--muted); list-style: none; }
-.add summary::-webkit-details-marker { display: none; }
-.add[open] summary { color: var(--ink); }
-.add-form { display: grid; grid-template-columns: 110px 1fr; gap: 6px; padding: 0 12px 12px; }
-.add-form input, .place-slot gmp-place-autocomplete { font: inherit; font-size: 14px; min-width: 0; width: 100%; }
-.add-form input { padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); color: var(--ink); }
-.add-form .full, .add-form .picked { grid-column: 1 / -1; }
-.picked { display: grid; font-size: 13px; background: var(--soft); border-radius: 8px; padding: 6px 10px; }
-.picked span { color: var(--muted); font-size: 12px; }
-.add-form button[type="submit"] { grid-column: 1 / -1; padding: 9px; border: 0; border-radius: 8px; background: var(--c); color: #fff; font-weight: 700; cursor: pointer; }
-.add-form button:disabled { opacity: .5; cursor: default; }
-.place-open { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); text-align: left; cursor: pointer; }
-.place-dialog { width: min(1120px, calc(100% - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 1px solid var(--rule); border-radius: 16px; background: var(--card); color: var(--ink); }
-.place-dialog::backdrop { background: rgb(0 0 0 / .55); }
-body:has(.place-dialog[open]) { overflow: hidden; }
-.place-dialog-head, .place-dialog-foot { position: sticky; background: var(--card); z-index: 1; padding: 14px 18px; display: flex; gap: 12px; align-items: center; justify-content: space-between; }
-.place-dialog-head { top: 0; border-bottom: 1px solid var(--rule); }
-.place-dialog-head button, .place-dialog-foot button { border: 1px solid var(--rule); border-radius: 8px; padding: 9px 14px; background: var(--card); cursor: pointer; }
-.place-dialog-search { padding: 14px 18px 0; }
-.place-dialog-search gmp-place-autocomplete { width: 100%; }
-.place-status { margin: 10px 18px; font-size: 14px; color: var(--muted); }
-.place-preview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 0 18px 18px; }
-.place-map { height: 400px; border-radius: 10px; background: var(--soft); position: sticky; top: 78px; }
-.place-details { min-width: 0; }
-.place-details gmp-place-details { display: block; width: 100%; color-scheme: light dark; }
-.place-dialog-foot { bottom: 0; border-top: 1px solid var(--rule); flex-wrap: wrap; }
-.place-dialog-foot button { background: var(--accent); color: white; border-color: var(--accent); font-weight: 700; }
-.place-dialog-foot button:disabled { opacity: .5; cursor: default; }
-.place-dialog-foot .place-manual { background: var(--card); border-color: var(--rule); color: var(--ink); }
-.place-dialog-foot p { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--muted); }
-[hidden] { display: none !important; }
-@media (max-width: 760px) { .place-preview { grid-template-columns: 1fr; } .place-map { height: 240px; position: static; } }
-/* ── reference tables ── */
-.tables { display: grid; grid-template-columns: minmax(0, 1fr) max-content; gap: 24px; }
-.tables .note { contain: inline-size; }
-.tables td, .tables th { white-space: nowrap; }
-@media (max-width: 1000px) { .tables { grid-template-columns: minmax(0, 1fr); } }
-.tables > div { min-width: 0; display: grid; grid-template-rows: auto 1fr auto; }
-.tables h2 { margin-bottom: 12px; }
-.tbl { overflow-x: auto; background: var(--card); border: 1px solid var(--rule); border-radius: 12px; }
-table { border-collapse: collapse; width: 100%; height: 100%; font-size: 14px; }
-thead tr { height: 1px; }
-th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
-th { font-size: 12px; color: var(--muted); font-weight: 500; }
-tr:last-child td { border-bottom: 0; }
-td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-a { color: var(--accent); text-underline-offset: 3px; }
-.note { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
-@media (prefers-reduced-motion: reduce) { .leg, .st, .ov-day { transition: none; } .ov-day:hover { transform: none; } }
-</style>
+<link rel="stylesheet" href="styles.css">
 <div class="wrap">
 <header>
   <div class="kicker">2026.12.5 – 12.12 · 7박 8일</div>
@@ -352,11 +154,26 @@ a { color: var(--accent); text-underline-offset: 3px; }
     <h2 id="place-title">지도에서 장소 찾기</h2>
     <button type="button" id="place-close" aria-label="장소 검색 닫기">닫기</button>
   </div>
-  <div id="place-search" class="place-dialog-search"></div>
+  <form id="place-search" class="place-dialog-search" role="search">
+    <input id="place-query" type="search" placeholder="예: 아사쿠사 라멘, 시부야 카페" aria-label="장소 또는 지역 검색" maxlength="200" required>
+    <button id="place-run" type="submit">검색</button>
+  </form>
   <p id="place-status" class="place-status" role="status" aria-live="polite">장소를 검색하면 지도와 상세 정보가 나와요.</p>
   <div class="place-preview">
-    <div id="place-map" class="place-map" role="region" aria-label="선택한 장소의 실제 위치" hidden></div>
-    <div id="place-details" class="place-details"></div>
+    <div class="place-map-wrap"><div id="place-map" class="place-map" role="region" aria-label="장소 검색 지도"></div></div>
+    <div class="place-panel">
+      <button id="place-back" class="place-back" type="button" hidden>← 검색 결과로</button>
+      <div id="place-results" class="place-results" tabindex="-1" aria-label="장소 검색 결과"></div>
+      <div id="place-detail-actions" class="place-detail-actions" hidden>
+        <button id="place-overview" type="button" aria-pressed="true" aria-controls="place-details">장소 정보</button>
+        <button id="place-menu" type="button" aria-pressed="false" aria-controls="place-menu-panel">메뉴 사진</button>
+      </div>
+      <div id="place-details" class="place-details" hidden></div>
+      <div id="place-menu-panel" hidden>
+        <p id="place-menu-status" role="status" aria-live="polite"></p>
+        <div id="place-menu-photos"></div>
+      </div>
+    </div>
   </div>
   <div class="place-dialog-foot">
     <a id="place-external" target="_blank" rel="noopener" hidden>Google Maps에서 더 보기 ↗</a>
@@ -450,7 +267,7 @@ a { color: var(--accent); text-underline-offset: 3px; }
     html += '<ol class="tl" id="tl"></ol>';
     html += '<details class="add" id="add"><summary>+ 일정 추가</summary>' +
       '<form class="add-form" id="add-form">' +
-      '<input id="f-time" type="time" required aria-label="시간">' +
+      '<label class="time-field">방문 시간<input id="f-time" type="time" required aria-label="방문 시간"></label>' +
       '<div id="f-place" class="place-slot"></div>' +
       '<div id="f-picked" class="picked" hidden></div>' +
       '<input id="f-memo" class="full" placeholder="메모 (선택)" maxlength="200" aria-label="메모">' +
@@ -524,14 +341,31 @@ a { color: var(--accent); text-underline-offset: 3px; }
   var candidate = null;
   var previewRequest = 0;
   var placeMap = null;
-  var placeMarker = null;
+  var mapReady = null;
+  var mapLibraries = null;
+  var placeMarkers = [];
+  var searchRequest = 0;
+  var searchTimer = null;
   var detailTimer = null;
+  var menuTimer = null;
+  var menuRequest = 0;
+  var menuPlaceId = null;
   searchDialog.addEventListener('close', function () {
-    previewRequest++;
-    candidate = null;
-    clearTimeout(detailTimer);
-    document.getElementById('place-details').replaceChildren();
+    searchRequest++;
+    clearTimeout(searchTimer);
+    resetPreview();
+    clearPlaceMarkers();
+    document.getElementById('place-results').replaceChildren();
   });
+  document.getElementById('place-back').addEventListener('click', function () {
+    resetPreview();
+    searchDialog.scrollTop = 0;
+    document.getElementById('place-results').focus({ preventScroll: true });
+    document.getElementById('place-status').textContent = '다른 장소의 핀이나 검색 결과를 눌러 비교해 보세요.';
+  });
+  document.getElementById('place-search').addEventListener('submit', function (e) { e.preventDefault(); searchPlaces(); });
+  document.getElementById('place-menu').addEventListener('click', showMenuPhotos);
+  document.getElementById('place-overview').addEventListener('click', function () { showPlacePanel(false); });
   document.getElementById('place-close').addEventListener('click', function () { searchDialog.close(); });
   document.getElementById('place-manual').addEventListener('click', function () {
     searchDialog.close();
@@ -556,7 +390,8 @@ a { color: var(--accent); text-underline-offset: 3px; }
         window.__mapsLoaded = function () { clearTimeout(timer); resolve(true); };
         var s = document.createElement('script');
         s.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(cfg.mapsKey) +
-          '&libraries=places&language=ko&region=JP&v=weekly&loading=async&callback=__mapsLoaded';
+          // shortcut: menu photo filtering needs Google's beta channel; use weekly once the feature is released there.
+          '&libraries=places&language=ko&region=JP&v=beta&loading=async&callback=__mapsLoaded';
         s.async = true;
         s.onerror = function () { clearTimeout(timer); console.error('Google Maps script failed to load'); resolve(false); };
         document.head.appendChild(s);
@@ -574,54 +409,175 @@ a { color: var(--accent); text-underline-offset: 3px; }
     var slot = document.getElementById('f-place');
     slot.innerHTML = '<input id="f-name" placeholder="장소 이름" maxlength="80" aria-label="장소 이름">';
     loadMaps().then(function (ok) {
-      if (!ok || !document.body.contains(slot) || !google.maps.places.PlaceAutocompleteElement) return;
+      if (!ok || !document.body.contains(slot) || !google.maps.places.PlaceSearchElement) return;
       var button = document.createElement('button');
       button.type = 'button';
       button.className = 'place-open';
-      button.textContent = '지도·사진·리뷰로 장소 찾기';
+      button.textContent = '장소 찾기';
       button.addEventListener('click', openPlaceSearch);
       slot.replaceChildren(button);
     });
   }
-  function openPlaceSearch() {
+  function resetPreview() {
+    previewRequest++;
     candidate = null;
-    document.getElementById('place-choose').disabled = true;
-    document.getElementById('place-choose').textContent = '12/' + current + ' 일정에 이 장소 선택';
-    document.getElementById('place-external').hidden = true;
-    document.getElementById('place-manual').hidden = true;
-    document.getElementById('place-map').hidden = true;
-    document.getElementById('place-status').textContent = '한국어로 장소를 검색하세요. 지도에서 위치를 보고 사진·리뷰·가격대를 비교할 수 있어요.';
-    var pac = new google.maps.places.PlaceAutocompleteElement({
-      includedRegionCodes: ['jp'], requestedLanguage: 'ko', requestedRegion: 'jp',
-      locationBias: { south: 35.0, west: 138.4, north: 36.0, east: 140.4 }
-    });
-    pac.setAttribute('placeholder', '예: 아사쿠사 이치란, 시부야 카페');
-    pac.addEventListener('gmp-select', function (e) { previewPlace(e.placePrediction.toPlace()); });
-    pac.addEventListener('gmp-error', function () {
-      document.getElementById('place-status').textContent = '검색에 연결하지 못했어요. 다시 검색하거나 장소 이름을 직접 입력해 주세요.';
-      document.getElementById('place-manual').hidden = false;
-    });
-    document.getElementById('place-search').replaceChildren(pac);
-    searchDialog.showModal();
-    pac.focus();
-  }
-  async function previewPlace(place) {
-    var request = ++previewRequest;
-    var status = document.getElementById('place-status');
-    var choose = document.getElementById('place-choose');
-    var mapBox = document.getElementById('place-map');
     clearTimeout(detailTimer);
-    candidate = null;
-    choose.disabled = true;
-    mapBox.hidden = true;
+    document.getElementById('place-choose').disabled = true;
     document.getElementById('place-external').hidden = true;
     document.getElementById('place-details').replaceChildren();
+    document.getElementById('place-details').hidden = true;
+    document.getElementById('place-results').hidden = false;
+    document.getElementById('place-back').hidden = true;
+    menuRequest++;
+    menuPlaceId = null;
+    clearTimeout(menuTimer);
+    document.getElementById('place-menu-photos').replaceChildren();
+    document.getElementById('place-menu-panel').hidden = true;
+    document.getElementById('place-detail-actions').hidden = true;
+    document.getElementById('place-overview').setAttribute('aria-pressed', 'true');
+    document.getElementById('place-menu').setAttribute('aria-pressed', 'false');
+  }
+  function showPlacePanel(menu) {
+    document.getElementById('place-details').hidden = menu;
+    document.getElementById('place-menu-panel').hidden = !menu;
+    document.getElementById('place-overview').setAttribute('aria-pressed', String(!menu));
+    document.getElementById('place-menu').setAttribute('aria-pressed', String(menu));
+    if (candidate) document.getElementById('place-status').textContent = candidate.name + (menu ? ' · 메뉴 관련 사진을 확인해 보세요.' : ' · 사진·리뷰·영업시간을 확인해 보세요.');
+  }
+  function showMenuPhotos() {
+    if (!candidate) return;
+    showPlacePanel(true);
+    if (menuPlaceId === candidate.placeId) return;
+    menuPlaceId = candidate.placeId;
+    var request = ++menuRequest;
+    var status = document.getElementById('place-menu-status');
+    status.textContent = '메뉴 관련 사진을 찾는 중…';
+    function failed() {
+      if (request !== menuRequest || !searchDialog.open) return;
+      menuRequest++;
+      clearTimeout(menuTimer);
+      menuPlaceId = null;
+      document.getElementById('place-menu-photos').replaceChildren();
+      status.textContent = '메뉴 사진을 불러오지 못했어요. 메뉴 사진 버튼을 다시 눌러 주세요.';
+    }
+    try {
+      var widget = new google.maps.places.AdvancedPlaceDetailsElement();
+      var media = new google.maps.places.PlaceMediaElement({ lightboxPreferred: true });
+      var filterApplied = false;
+      widget.style.visibility = 'hidden';
+      widget.append(new google.maps.places.PlaceDetailsPlaceRequestElement({ place: menuPlaceId }), media);
+      widget.addEventListener('gmp-load', function () {
+        if (request !== menuRequest || !searchDialog.open) return;
+        // Apply after mounting: the beta widget resets media options during its first render.
+        if (!filterApplied) { filterApplied = true; media.query = 'メニュー'; return; }
+        clearTimeout(menuTimer);
+        var count = media.searchMediaCount || 0;
+        widget.style.visibility = 'visible';
+        widget.hidden = count === 0;
+        status.textContent = count ? '메뉴 관련 사진 ' + count + '장 · 사진을 누르면 확대할 수 있어요.' : '메뉴 관련 사진을 찾지 못했어요. 장소 정보에서 전체 사진이나 가게 웹사이트를 확인해 주세요.';
+      });
+      widget.addEventListener('gmp-error', failed);
+      menuTimer = setTimeout(failed, 15000);
+      document.getElementById('place-menu-photos').replaceChildren(widget);
+    } catch (err) { console.error('menu photos failed', err); failed(); }
+  }
+  function clearPlaceMarkers() {
+    placeMarkers.forEach(function (item) { item.marker.map = null; });
+    placeMarkers = [];
+  }
+  function initPlaceMap() {
+    if (mapReady) return mapReady;
+    mapReady = Promise.all([google.maps.importLibrary('maps'), google.maps.importLibrary('marker'), google.maps.importLibrary('core')]).then(function (libs) {
+      mapLibraries = libs;
+      placeMap = new libs[0].Map(document.getElementById('place-map'), { center: { lat: 35.6812, lng: 139.7671 }, zoom: 12, mapId: 'DEMO_MAP_ID', mapTypeControl: false, streetViewControl: false, clickableIcons: false });
+      return placeMap;
+    }).catch(function (err) { mapReady = null; throw err; });
+    return mapReady;
+  }
+  async function openPlaceSearch() {
+    var request = ++searchRequest;
+    resetPreview();
+    document.getElementById('place-choose').textContent = '12/' + current + ' 일정에 이 장소 선택';
+    document.getElementById('place-manual').hidden = true;
+    document.getElementById('place-query').value = '';
+    document.getElementById('place-status').textContent = '지도를 불러오는 중…';
+    searchDialog.showModal();
+    document.getElementById('place-query').focus();
+    try {
+      await initPlaceMap();
+      if (request !== searchRequest || !searchDialog.open) return;
+      document.getElementById('place-status').textContent = '한국어로 검색하면 결과가 지도에 핀으로 표시돼요. 핀이나 목록을 눌러 비교해 보세요.';
+    } catch (err) { if (request === searchRequest && searchDialog.open) searchFailed(); }
+  }
+  function searchFailed() {
+    clearTimeout(searchTimer);
+    document.getElementById('place-status').textContent = '검색에 연결하지 못했어요. 다시 검색하거나 장소 이름을 직접 입력해 주세요.';
+    document.getElementById('place-manual').hidden = false;
+  }
+  async function searchPlaces() {
+    var query = document.getElementById('place-query').value.trim();
+    if (!query || !searchDialog.open) return;
+    var request = ++searchRequest;
+    clearTimeout(searchTimer);
+    resetPreview();
+    clearPlaceMarkers();
+    document.getElementById('place-results').replaceChildren();
+    document.getElementById('place-manual').hidden = true;
+    document.getElementById('place-status').textContent = '검색 결과를 불러오는 중…';
+    try {
+      await initPlaceMap();
+      if (request !== searchRequest || !searchDialog.open) return;
+      var widget = new google.maps.places.PlaceSearchElement({ selectable: true });
+      widget.append(new google.maps.places.PlaceTextSearchRequestElement({ textQuery: query, locationBias: placeMap.getCenter(), maxResultCount: 20 }), new google.maps.places.PlaceAllContentElement());
+      widget.addEventListener('gmp-select', function (e) { if (request === searchRequest && searchDialog.open) return previewPlace(e.place); });
+      widget.addEventListener('gmp-load', function () {
+        if (request !== searchRequest || !searchDialog.open) return;
+        clearTimeout(searchTimer);
+        showResultPins(widget.places || []);
+      });
+      widget.addEventListener('gmp-error', function () { if (request === searchRequest && searchDialog.open) searchFailed(); });
+      searchTimer = setTimeout(function () { if (request === searchRequest && searchDialog.open) searchFailed(); }, 15000);
+      document.getElementById('place-results').replaceChildren(widget);
+    } catch (err) { if (request === searchRequest && searchDialog.open) { console.error('place search failed', err); searchFailed(); } }
+  }
+  function showResultPins(places) {
+    clearPlaceMarkers();
+    var request = searchRequest;
+    var bounds = new mapLibraries[2].LatLngBounds();
+    places.forEach(function (place, index) {
+      if (!place.location) return;
+      var pin = document.createElement('div');
+      pin.className = 'result-pin';
+      var number = document.createElement('span');
+      number.textContent = String(index + 1);
+      pin.append(number);
+      var marker = new mapLibraries[1].AdvancedMarkerElement({ map: placeMap, position: place.location, title: '검색 결과 ' + (index + 1), gmpClickable: true, content: pin });
+      marker.addEventListener('gmp-click', function () { if (request === searchRequest && searchDialog.open) previewPlace(place); });
+      placeMarkers.push({ id: place.id, marker: marker, pin: pin });
+      bounds.extend(place.location);
+    });
+    if (placeMarkers.length === 1) { placeMap.panTo(placeMarkers[0].marker.position); placeMap.setZoom(16); }
+    else if (placeMarkers.length) placeMap.fitBounds(bounds, 48);
+    document.getElementById('place-status').textContent = places.length ? places.length + '곳을 찾았어요. 핀이나 목록에서 장소를 골라 보세요.' : '검색 결과가 없어요. 지역명이나 다른 장소 이름으로 다시 검색해 주세요.';
+  }
+  async function previewPlace(place) {
+    resetPreview();
+    var request = previewRequest;
+    var status = document.getElementById('place-status');
+    var choose = document.getElementById('place-choose');
+    document.getElementById('place-results').hidden = true;
+    document.getElementById('place-details').hidden = false;
+    document.getElementById('place-back').hidden = false;
+    searchDialog.scrollTop = 0;
+    document.getElementById('place-back').focus({ preventScroll: true });
+    placeMarkers.forEach(function (item) { item.pin.classList.toggle('selected', item.id === place.id); item.marker.zIndex = item.id === place.id ? 100 : 0; });
     status.textContent = '장소와 상세 정보를 불러오는 중…';
     try {
       await place.fetchFields({ fields: ['id', 'displayName', 'formattedAddress', 'location'] });
       if (request !== previewRequest || !searchDialog.open) return;
       candidate = { name: place.displayName, placeId: place.id, address: place.formattedAddress || '' };
       choose.disabled = false;
+      document.getElementById('place-detail-actions').hidden = false;
       var external = document.getElementById('place-external');
       external.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(candidate.name) + '&query_place_id=' + encodeURIComponent(candidate.placeId);
       external.hidden = false;
@@ -631,27 +587,18 @@ a { color: var(--accent); text-underline-offset: 3px; }
       widget.addEventListener('gmp-load', function () {
         if (request !== previewRequest || !searchDialog.open) return;
         clearTimeout(detailTimer);
-        status.textContent = candidate.name + ' · 지도와 상세 정보를 확인한 뒤 아래에서 선택하세요.';
+        if (document.getElementById('place-menu-panel').hidden) status.textContent = candidate.name + ' · 지도와 상세 정보를 확인한 뒤 아래에서 선택하세요.';
       });
       widget.addEventListener('gmp-error', function () {
         if (request !== previewRequest || !searchDialog.open) return;
         clearTimeout(detailTimer);
-        status.textContent = '상세 정보를 불러오지 못했어요. 다시 검색하거나 Google Maps에서 이 장소를 바로 확인할 수 있어요.';
+        if (document.getElementById('place-menu-panel').hidden) status.textContent = '상세 정보를 불러오지 못했어요. 다시 검색하거나 Google Maps에서 이 장소를 바로 확인할 수 있어요.';
       });
       detailTimer = setTimeout(function () {
-        if (request === previewRequest && searchDialog.open) status.textContent = '상세 정보 연결이 늦어지고 있어요. 다시 검색하거나 Google Maps에서 이 장소를 확인해 주세요.';
+        if (request === previewRequest && searchDialog.open && document.getElementById('place-menu-panel').hidden) status.textContent = '상세 정보 연결이 늦어지고 있어요. 다시 검색하거나 Google Maps에서 이 장소를 확인해 주세요.';
       }, 15000);
       document.getElementById('place-details').replaceChildren(widget);
-      if (place.location) {
-        var libraries = await Promise.all([google.maps.importLibrary('maps'), google.maps.importLibrary('marker')]);
-        if (request !== previewRequest || !searchDialog.open) return;
-        mapBox.hidden = false;
-        if (!placeMap) placeMap = new libraries[0].Map(mapBox, { center: place.location, zoom: 16, mapId: 'DEMO_MAP_ID', mapTypeControl: false, streetViewControl: false });
-        placeMap.setCenter(place.location);
-        placeMap.setZoom(16);
-        if (placeMarker) placeMarker.map = null;
-        placeMarker = new libraries[1].AdvancedMarkerElement({ map: placeMap, position: place.location, title: place.displayName });
-      }
+      if (place.location && placeMap) placeMap.panTo(place.location);
     } catch (err) {
       if (request !== previewRequest || !searchDialog.open) return;
       clearTimeout(detailTimer);

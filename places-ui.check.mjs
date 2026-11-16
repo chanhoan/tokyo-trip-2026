@@ -6,25 +6,26 @@ const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
 const source = html.slice(html.indexOf('  // ── place search:'), html.indexOf('  var shared = []'));
 
 class Element {
-  constructor(options) { this.options = options; this.children = []; this.listeners = {}; this.hidden = false; this.disabled = false; this.open = false; }
+  constructor(options) { this.options = options; this.children = []; this.listeners = {}; this.style = {}; this.classList = { toggle() {} }; this.hidden = false; this.disabled = false; this.open = false; }
   addEventListener(type, listener) { this.listeners[type] = listener; }
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
   setAttribute(name, value) { this[name] = value; }
   showModal() { this.open = true; }
   close() { this.open = false; this.listeners.close?.(); }
-  focus() {}
-  dispatch(type) { this.listeners[type]?.(); }
+  focus() { this.focused = true; }
+  dispatch(type, event = {}) { return this.listeners[type]?.(event); }
 }
 const nodes = new Map();
 const node = id => { if (!nodes.has(id)) nodes.set(id, new Element()); return nodes.get(id); };
 const sdk = {
-  places: { PlaceAutocompleteElement: Element, PlaceDetailsElement: Element,
+  places: { PlaceSearchElement: Element, PlaceTextSearchRequestElement: class extends Element { constructor(options) { super(options); Object.assign(this, options); } }, PlaceDetailsElement: Element,
     PlaceDetailsPlaceRequestElement: class extends Element { constructor(options) { super(); this.place = options.place; } },
-    PlaceAllContentElement: Element },
+    PlaceAllContentElement: Element, AdvancedPlaceDetailsElement: Element, PlaceMediaElement: class extends Element { constructor(options) { super(); Object.assign(this, options); this.searchMediaCount = 0; } } },
   importLibrary: async name => name === 'maps'
-    ? { Map: class { setCenter() {} setZoom() {} } }
-    : { AdvancedMarkerElement: class {} }
+    ? { Map: class { constructor() { this.center = { lat: 35.68, lng: 139.76 }; } getCenter() { return this.center; } panTo() {} setZoom(zoom) { this.zoom = zoom; } fitBounds() {} } }
+    : name === 'marker' ? { AdvancedMarkerElement: class extends Element { constructor(options) { super(); Object.assign(this, options); } } }
+    : { LatLngBounds: class { extend() {} } }
 };
 const context = vm.createContext({
   document: { getElementById: node, createElement: () => new Element(), body: { contains: () => true } },
@@ -37,15 +38,56 @@ assert.equal(typeof context.previewPlace, 'function', 'rich preview is available
 
 const place = name => ({ id: 'ChIJ_' + name, displayName: name, formattedAddress: '도쿄',
   location: { lat: 35.7, lng: 139.8 }, fetchFields: async () => {} });
-context.openPlaceSearch();
+await context.openPlaceSearch();
 assert.equal(node('place-dialog').open, true);
-const search = node('place-search').children[0];
-assert.equal(search.options.requestedLanguage, 'ko', 'search requests Korean results');
-assert.equal(search.options.includedRegionCodes[0], 'jp', 'search stays in Japan');
+assert.ok(context.placeMap, 'map exists before any search');
+assert.equal(node('place-map').hidden, false, 'map is visible before searching');
+assert.match(html, /<label[^>]*>방문 시간.*id="f-time"/, 'time field has visible Safari-safe label');
+assert.ok(!html.includes('지도·사진·리뷰로 장소 찾기'), 'short button text');
+node('place-query').value = '  이치란  ';
+await context.searchPlaces();
+const search = node('place-results').children[0];
+assert.equal(search.children[0].textQuery, '이치란');
+const first = place('라멘');
+const second = place('다른 가게');
+search.places = [first, second];
+await search.dispatch('gmp-load');
+assert.equal(context.placeMarkers.length, 2, 'every search result has a pin');
+assert.equal(context.candidate, null, 'search results do not select a place automatically');
+context.placeMarkers[0].marker.dispatch('gmp-click');
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(context.candidate.name, '라멘', 'pin opens place details');
+assert.equal(node('place-back').focused, true, 'selection moves focus into the detail view');
+await search.dispatch('gmp-select', { place: second });
+assert.equal(context.candidate.name, '다른 가게', 'result card opens place details');
+assert.equal(context.placeMarkers.length, 2, 'browsing keeps all result pins');
+node('place-back').dispatch('click');
+assert.equal(node('place-results').hidden, false, 'back restores existing result list');
+assert.equal(context.candidate, null, 'back clears unconfirmed candidate');
+assert.equal(node('place-results').focused, true, 'back restores result focus');
 await context.previewPlace(place('라멘'));
 assert.equal(context.candidate.name, '라멘');
 assert.equal(context.picked, null, 'preview does not commit before confirmation');
 assert.equal(node('place-choose').disabled, false);
+assert.equal(node('place-menu-photos').children.length, 0, 'menu photos load only when requested');
+node('place-menu').dispatch('click');
+const menuWidget = node('place-menu-photos').children[0];
+assert.ok(menuWidget, 'menu button opens the photo search widget');
+const menuMedia = menuWidget.children.find(child => child instanceof sdk.places.PlaceMediaElement);
+assert.equal(menuWidget.style.visibility, 'hidden', 'unfiltered default photos are hidden');
+menuWidget.dispatch('gmp-load');
+assert.equal(menuMedia.query, 'メニュー', 'menu photo search uses Japanese for Japanese businesses');
+menuMedia.searchMediaCount = 5;
+menuWidget.dispatch('gmp-load');
+assert.match(node('place-menu-status').textContent, /5/);
+node('place-overview').dispatch('click');
+assert.equal(node('place-details').hidden, false);
+node('place-menu').dispatch('click');
+assert.equal(node('place-menu-photos').children[0], menuWidget, 'toggle reuses loaded menu photos');
+const menuHeading = node('place-status').textContent;
+node('place-details').children[0].dispatch('gmp-load');
+assert.equal(node('place-status').textContent, menuHeading, 'background overview cannot replace menu status');
+node('place-overview').dispatch('click');
 const widget = node('place-details').children[0];
 assert.ok(widget.children.some(child => child instanceof sdk.places.PlaceAllContentElement), 'request all available Google details');
 widget.dispatch('gmp-error');
@@ -63,6 +105,52 @@ await slow;
 assert.equal(context.candidate.name, '최신 선택', 'old responses cannot replace latest result');
 node('place-dialog').close();
 assert.equal(context.picked.name, '라멘', 'cancel preserves previous selection');
+menuWidget.dispatch('gmp-load');
+assert.equal(node('place-menu-photos').children.length, 0, 'closed preview clears menu content');
+
+await context.openPlaceSearch();
+node('place-query').value = '첫 검색';
+await context.searchPlaces();
+const oldResults = node('place-results').children[0];
+oldResults.places = [first];
+await oldResults.dispatch('gmp-load');
+assert.equal(context.placeMap.zoom, 16, 'one result stays at a useful street zoom');
+const oldPin = context.placeMarkers[0].marker;
+node('place-query').value = '새 검색';
+await context.searchPlaces();
+assert.equal(context.candidate, null, 'new search clears candidate');
+assert.equal(node('place-detail-actions').hidden, true, 'new search hides old place photo actions');
+oldPin.dispatch('gmp-click');
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(context.candidate, null, 'stale pin events cannot select previous search results');
+oldResults.places = [first];
+await oldResults.dispatch('gmp-load');
+assert.equal(context.placeMarkers.length, 0, 'stale search results cannot add pins');
+const newResults = node('place-results').children[0];
+newResults.places = [];
+await newResults.dispatch('gmp-load');
+assert.match(node('place-status').textContent, /없어요/);
+newResults.dispatch('gmp-error');
+assert.equal(node('place-map').hidden, false, 'search errors leave map visible');
+assert.equal(node('place-manual').hidden, false, 'denied search offers manual entry');
+node('place-dialog').close();
+
+node('place-dialog').showModal();
+await context.previewPlace(place('메뉴 없음'));
+node('place-menu').dispatch('click');
+const emptyMenu = node('place-menu-photos').children[0];
+emptyMenu.dispatch('gmp-load');
+emptyMenu.dispatch('gmp-load');
+assert.equal(emptyMenu.hidden, true, 'zero menu matches never display fallback general photos');
+assert.match(node('place-menu-status').textContent, /찾지 못/);
+emptyMenu.dispatch('gmp-error');
+assert.match(node('place-menu-status').textContent, /다시/);
+const failedMenuStatus = node('place-menu-status').textContent;
+emptyMenu.children.find(child => child instanceof sdk.places.PlaceMediaElement).searchMediaCount = 5;
+emptyMenu.dispatch('gmp-load');
+assert.equal(node('place-menu-status').textContent, failedMenuStatus, 'late load after failure cannot report detached photos as loaded');
+node('place-overview').dispatch('click');
+node('place-dialog').close();
 
 node('place-dialog').showModal();
 let finishClosed;
@@ -78,8 +166,10 @@ assert.equal(node('place-choose').disabled, true);
 assert.match(node('place-status').textContent, /다시/);
 node('place-dialog').close();
 assert.equal(await context.loadMaps(), false, 'missing API key keeps manual input available');
-context.openPlaceSearch();
-node('place-search').children[0].dispatch('gmp-error');
+await context.openPlaceSearch();
+node('place-query').value = '오류';
+await context.searchPlaces();
+node('place-results').children[0].dispatch('gmp-error');
 assert.equal(node('place-manual').hidden, false, 'denied search offers manual entry');
 node('place-manual').dispatch('click');
 assert.match(node('f-place').innerHTML, /id="f-name"/);
