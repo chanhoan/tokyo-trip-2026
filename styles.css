@@ -117,6 +117,9 @@ svg.map { display: block; width: 100%; height: 320px; }
 .tl { list-style: none; margin: 0; padding: 0; display: grid; }
 .tl li { display: grid; grid-template-columns: 56px 1fr; }
 .tl .t { font-family: var(--font-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.tl .reorder { display: flex; gap: 4px; margin-top: 6px; }
+.tl .reorder button { padding: 0; width: 44px; height: 44px; border: 1px solid var(--rule); border-radius: 6px; background: var(--card); color: var(--ink); cursor: pointer; }
+.tl .reorder button:disabled { opacity: .35; cursor: default; }
 .tl .x { position: relative; border-left: 2px solid color-mix(in srgb, var(--c) 45%, transparent); padding: 0 0 14px 18px; font-size: 15px; }
 .tl li:last-child .x { border-left-color: transparent; padding-bottom: 0; }
 .tl .x::before {
@@ -135,6 +138,9 @@ svg.map { display: block; width: 100%; height: 320px; }
 .night { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .night a { font-weight: 700; font-size: 16px; }
 .night span { font-size: 13px; color: var(--muted); }
+.stay-links { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; margin-top: 6px; }
+.stay-links a, .stay-links button { display: inline-flex; align-items: center; min-height: 44px; padding: 6px 10px; border: 1px solid var(--rule); border-radius: 8px; font-size: 13px; font-weight: 500; background: var(--card); color: var(--ink); }
+.stay-links button:disabled { color: var(--muted); cursor: default; }
 /* ── places added by the group: rows inside .tl + the add form ── */
 .tl li.added .x::before { background: var(--c); }
 .tl li.added .x { display: grid; gap: 1px; }

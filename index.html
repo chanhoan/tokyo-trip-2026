@@ -138,10 +138,10 @@
       <table>
         <thead><tr><th>숙소</th><th>날짜</th></tr></thead>
         <tbody>
-          <tr><td><a href="https://www.airbnb.co.kr/rooms/1252584854885560088">아사쿠사</a></td><td class="num">12/5–12/9</td></tr>
-          <tr><td><a href="https://www.airbnb.co.kr/rooms/1052017132403984548">후지시</a></td><td class="num">12/7–12/8</td></tr>
-          <tr><td><a href="https://www.airbnb.co.kr/rooms/1474390371760984472">요코하마</a></td><td class="num">12/9–12/10</td></tr>
-          <tr><td><a href="https://www.airbnb.co.kr/rooms/1780180127620391752">시부야</a></td><td class="num">12/10–12/12</td></tr>
+          <tr><td><strong>아사쿠사</strong><div class="stay-links" data-stay="asakusa"></div></td><td class="num">12/5–12/9</td></tr>
+          <tr><td><strong>후지시</strong><div class="stay-links" data-stay="fuji"></div></td><td class="num">12/7–12/8</td></tr>
+          <tr><td><strong>요코하마</strong><div class="stay-links" data-stay="yokohama"></div></td><td class="num">12/9–12/10</td></tr>
+          <tr><td><strong>시부야</strong><div class="stay-links" data-stay="shibuya"></div></td><td class="num">12/10–12/12</td></tr>
         </tbody>
       </table>
     </div>
@@ -185,11 +185,20 @@
 <script>
 (function () {
   var STAYS = {
-    asakusa:  { name: '아사쿠사', url: 'https://www.airbnb.co.kr/rooms/1252584854885560088', note: '12/5–12/9 · 4박' },
-    fuji:     { name: '후지시',   url: 'https://www.airbnb.co.kr/rooms/1052017132403984548', note: '요시와라혼초역 근처 · 셀프 체크인' },
-    yokohama: { name: '요코하마', url: 'https://www.airbnb.co.kr/rooms/1474390371760984472', note: '12/9–12/10 · 1박' },
-    shibuya:  { name: '시부야',   url: 'https://www.airbnb.co.kr/rooms/1780180127620391752', note: '12/10–12/12 · 2박' }
+    asakusa:  { name: '아사쿠사', url: 'https://www.airbnb.co.kr/rooms/1252584854885560088', address: '', note: '12/5–12/9 · 4박' },
+    fuji:     { name: '후지시',   url: 'https://www.airbnb.co.kr/rooms/1052017132403984548', address: '', note: '요시와라혼초역 근처 · 셀프 체크인' },
+    yokohama: { name: '요코하마', url: 'https://www.airbnb.co.kr/rooms/1474390371760984472', address: '', note: '12/9–12/10 · 1박' },
+    shibuya:  { name: '시부야',   url: 'https://www.airbnb.co.kr/rooms/1780180127620391752', address: '', note: '12/10–12/12 · 2박' }
   };
+  function stayLinks(st) {
+    return (st.address
+      ? '<a href="' + esc(mapsUrl({ name: st.address })) + '" target="_blank" rel="noopener">길찾기 ↗</a>'
+      : '<button type="button" disabled title="정확한 숙소 주소가 확인되면 연결됩니다.">길찾기 · 주소 확인 중</button>') +
+      '<a href="' + esc(st.url) + '" target="_blank" rel="noopener">숙소 상세 안내 ↗</a>';
+  }
+  document.querySelectorAll('[data-stay]').forEach(function (el) {
+    el.innerHTML = stayLinks(STAYS[el.dataset.stay]);
+  });
   var DAYS = [
     { d: 5, dow: '토', title: '도착, 아사쿠사', short: '도착 · 아사쿠사', night: 'asakusa', move: ['나리타공항', '아사쿠사'],
       items: [['12:40', '인천 T1 출발 (MM642)'], ['15:15', '나리타 도착, 입국 약 1시간'], ['저녁', '스카이라이너로 우에노, 긴자선으로 아사쿠사']],
@@ -289,7 +298,7 @@
     }
     var st = day.night && STAYS[day.night];
     side += '<div class="box"><div class="box-h">오늘 밤</div><div class="night">' +
-      (st ? '<a href="' + st.url + '">' + st.name + '</a><span>' + st.note + '</span>' : '<strong>귀국, 인천 도착</strong>') +
+      (st ? '<strong>' + esc(st.name) + '</strong><span>' + esc(st.note) + '</span><div class="stay-links">' + stayLinks(st) + '</div>' : '<strong>귀국, 인천 도착</strong>') +
       '</div></div></div>';
     document.getElementById('d-head').innerHTML = head;
     document.getElementById('d-main').innerHTML = html;
@@ -314,12 +323,18 @@
     var prev = 0;
     var rows = day.items.map(function (it, i) {
       prev = minutesOf(it[0], prev);
-      return { k: prev, order: i, item: it };
+      return { id: 'fixed:' + day.d + ':' + it[1], k: prev, order: i, item: it };
     });
     shared.filter(function (p) { return p.day === day.d; }).forEach(function (p) {
-      rows.push({ k: minutesOf(p.time, 9999), order: 1000 + p.at, place: p });
+      rows.push({ id: p.id, k: minutesOf(p.time, 9999), order: 1000 + p.at, place: p });
     });
-    return rows.sort(function (a, b) { return a.k - b.k || a.order - b.order; });
+    rows.sort(function (a, b) { return a.k - b.k || a.order - b.order; });
+    var saved = timelineOrders[day.d] || [];
+    var ranks = new Map(saved.map(function (id, index) { return [id, index]; }));
+    return rows.sort(function (a, b) {
+      return (ranks.has(a.id) ? ranks.get(a.id) : saved.length) -
+        (ranks.has(b.id) ? ranks.get(b.id) : saved.length);
+    });
   }
   function mapsUrl(p) {
     return 'https://www.google.com/maps/dir/?api=1&travelmode=transit&destination=' + encodeURIComponent(p.name) +
@@ -328,10 +343,18 @@
   function renderTimeline() {
     var ol = document.getElementById('tl');
     if (!ol) return;
-    ol.innerHTML = timelineRows(byDay(current)).map(function (r) {
+    var rows = timelineRows(byDay(current));
+    ol.innerHTML = rows.map(function (r, index) {
       if (r.item) {
         return '<li><span class="t">' + esc(r.item[0]) + '</span><span class="x">' + esc(r.item[1]) +
-          (r.item[2] ? '<span class="pill">' + esc(r.item[2]) + '</span>' : '') + '</span></li>';
+          (r.item[2] ? '<span class="pill">' + esc(r.item[2]) + '</span>' : '') +
+          '<span class="reorder">' + [-1, 1].map(function (step) {
+            var label = step < 0 ? '위로' : '아래로';
+            return '<button type="button" class="move-item" data-id="' + esc(r.id) + '" data-step="' + step +
+              '" aria-label="' + esc(r.item[1]) + ' ' + label + '"' +
+              (orderSaving || loadFailed || !placesLoaded || index + step < 0 || index + step >= rows.length ? ' disabled' : '') +
+              '>' + (step < 0 ? '↑' : '↓') + '</button>';
+          }).join('') + '</span></span></li>';
       }
       var p = r.place;
       return '<li class="added"><span class="t">' + esc(p.time) + '</span><span class="x">' +
@@ -615,13 +638,26 @@
     }
   }
   var shared = [];
+  var timelineOrders = {};
+  var placesLoaded = false;
+  var orderSaving = false;
+  var orderVersion = 0;
   var loadFailed = false;
   var POLL_MS = 20000;
   function load() {
+    if (orderSaving) return Promise.resolve();
+    var version = orderVersion;
     return fetch('/api/places', { cache: 'no-store' })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(function (d) { shared = d.places || []; loadFailed = false; renderTimeline(); })
-      .catch(function (err) { console.error('load places failed', err); loadFailed = true; renderTimeline(); });
+      .then(function (d) {
+        if (version !== orderVersion) return;
+        shared = d.places || []; timelineOrders = d.orders || {};
+        placesLoaded = true; loadFailed = false; renderTimeline();
+      })
+      .catch(function (err) {
+        if (version !== orderVersion) return;
+        console.error('load places failed', err); loadFailed = true; renderTimeline();
+      });
   }
   detail.addEventListener('submit', function (e) {
     if (e.target.id !== 'add-form') return;
@@ -658,12 +694,47 @@
       .then(function () { btn.disabled = false; });
   });
   detail.addEventListener('click', function (e) {
+    var move = e.target.closest('.move-item');
+    if (move) { moveFixedItem(move); return; }
     var del = e.target.closest('.del');
     if (!del || !confirm('"' + del.dataset.name + '"을(를) 지울까요? 모두의 화면에서 지워져요.')) return;
     fetch('/api/places?id=' + encodeURIComponent(del.dataset.id), { method: 'DELETE' })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return load(); })
       .catch(function () { alert('지우지 못했어요. 다시 시도해 주세요.'); });
   });
+  async function moveFixedItem(button) {
+    if (orderSaving || !placesLoaded || loadFailed) return;
+    var day = current;
+    var rows = timelineRows(byDay(day));
+    var index = rows.findIndex(function (r) { return r.id === button.dataset.id && r.item; });
+    var next = index + Number(button.dataset.step);
+    if (index < 0 || next < 0 || next >= rows.length) return;
+    var ids = rows.map(function (r, i) { return rows[i === index ? next : i === next ? index : i].id; });
+    orderSaving = true;
+    orderVersion++;
+    renderTimeline();
+    try {
+      var response = await fetch('/api/places', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ day: day, ids: ids })
+      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      timelineOrders = Object.assign({}, timelineOrders, { [day]: ids });
+    } catch (err) {
+      console.error('save order failed', err);
+      alert('순서를 저장하지 못했어요. 다시 시도해 주세요.');
+    } finally {
+      orderSaving = false;
+      orderVersion++;
+      renderTimeline();
+      if (current === day) {
+        var buttons = Array.from(detail.querySelectorAll('.move-item'));
+        var focus = buttons.find(function (b) { return b.dataset.id === button.dataset.id && b.dataset.step === button.dataset.step && !b.disabled; }) ||
+          buttons.find(function (b) { return b.dataset.id === button.dataset.id && !b.disabled; });
+        if (focus) focus.focus({ preventScroll: true });
+      }
+    }
+  }
   setInterval(function () { if (!document.hidden) load(); }, POLL_MS);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) load(); });
   var FULL = { x: 0, y: 0, width: 1000, height: 600 };
