@@ -190,18 +190,17 @@
     yokohama: { name: '요코하마', url: 'https://www.airbnb.co.kr/rooms/1474390371760984472', address: '', note: '12/9–12/10 · 1박' },
     shibuya:  { name: '시부야',   url: 'https://www.airbnb.co.kr/rooms/1780180127620391752', address: '', note: '12/10–12/12 · 2박' }
   };
-  function stayLinks(st) {
-    return (st.address
-      ? '<a href="' + esc(mapsUrl({ name: st.address })) + '" target="_blank" rel="noopener">길찾기 ↗</a>'
-      : '<button type="button" disabled title="정확한 숙소 주소가 확인되면 연결됩니다.">길찾기 · 주소 확인 중</button>') +
-      '<a href="' + esc(st.url) + '" target="_blank" rel="noopener">숙소 상세 안내 ↗</a>';
-  }
-  document.querySelectorAll('tr[data-stay]').forEach(function (row) {
-    var st = STAYS[row.dataset.stay];
-    row.querySelector('.route').innerHTML = st.address
+  // shared by the lodging table and the day view's "오늘 밤" box
+  function routeLink(st) {
+    return st.address
       ? '<a href="' + esc(mapsUrl({ name: st.address })) + '" target="_blank" rel="noopener">길찾기 ↗</a>'
       : '<span title="정확한 숙소 주소가 확인되면 길찾기가 연결됩니다.">주소 확인 중</span>';
-    row.querySelector('.detail').innerHTML = '<a href="' + esc(st.url) + '" target="_blank" rel="noopener">상세 안내 ↗</a>';
+  }
+  function detailLink(st) { return '<a href="' + esc(st.url) + '" target="_blank" rel="noopener">상세 안내 ↗</a>'; }
+  document.querySelectorAll('tr[data-stay]').forEach(function (row) {
+    var st = STAYS[row.dataset.stay];
+    row.querySelector('.route').innerHTML = routeLink(st);
+    row.querySelector('.detail').innerHTML = detailLink(st);
   });
   var DAYS = [
     { d: 5, dow: '토', title: '도착, 아사쿠사', short: '도착 · 아사쿠사', night: 'asakusa', move: ['나리타공항', '아사쿠사'],
@@ -302,7 +301,8 @@
     }
     var st = day.night && STAYS[day.night];
     side += '<div class="box"><div class="box-h">오늘 밤</div><div class="night">' +
-      (st ? '<strong>' + esc(st.name) + '</strong><span>' + esc(st.note) + '</span><div class="stay-links">' + stayLinks(st) + '</div>' : '<strong>귀국, 인천 도착</strong>') +
+      (st ? '<div><strong>' + esc(st.name) + '</strong><span class="route">' + routeLink(st) + '</span></div>' +
+        '<span>' + esc(st.note) + '</span>' + detailLink(st) : '<strong>귀국, 인천 도착</strong>') +
       '</div></div></div>';
     document.getElementById('d-head').innerHTML = head;
     document.getElementById('d-main').innerHTML = html;
