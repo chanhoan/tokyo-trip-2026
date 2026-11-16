@@ -311,6 +311,7 @@
     document.getElementById('prev').addEventListener('click', function () { go(DAYS[idx - 1].d); });
     document.getElementById('next').addEventListener('click', function () { go(DAYS[idx + 1].d); });
     try { document.getElementById('f-by').value = localStorage.getItem('nick') || ''; } catch (e) { /* nickname memory is optional */ }
+    setNowTime(document.getElementById('add-form'));
     picked = null;
     mountPlaceInput();
     renderTimeline();
@@ -686,8 +687,7 @@
     fetch('/api/places', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then(function (r) {
         if (!r.ok) return r.json().catch(function () { return {}; }).then(function (d) { throw new Error(d.error || '추가하지 못했어요.'); });
-        form.querySelector('#f-hour').value = '';
-        form.querySelector('#f-minute').value = '';
+        setNowTime(form);
         form.querySelector('#f-memo').value = '';
         picked = null;
         showPicked();
@@ -808,9 +808,26 @@
     var m = /^#d(\d+)$/.exec(location.hash);
     return m && byDay(Number(m[1])) ? Number(m[1]) : null;
   }
+  // Trip runs on Tokyo time (KST is the same UTC+9), regardless of the device's time zone.
+  function tokyoNow() {
+    var p = {};
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date()).forEach(function (x) { p[x.type] = x.value; });
+    return p; // { year, month, day, hour, minute } as zero-padded strings
+  }
+  // before the trip → first day, during → that day, after → last day
   function today() {
-    var n = new Date();
-    return n.getFullYear() === 2026 && n.getMonth() === 11 && byDay(n.getDate()) ? n.getDate() : null;
+    var n = tokyoNow();
+    var ymd = n.year + '-' + n.month + '-' + n.day;
+    var first = DAYS[0].d, last = DAYS[DAYS.length - 1].d;
+    if (ymd < '2026-12-' + String(first).padStart(2, '0')) return first;
+    if (ymd > '2026-12-' + String(last).padStart(2, '0')) return last;
+    return Number(n.day);
+  }
+  function setNowTime(form) {
+    var n = tokyoNow();
+    form.querySelector('#f-hour').value = n.hour;
+    form.querySelector('#f-minute').value = n.minute;
   }
 
   toggle.addEventListener('click', function () { showAll = !showAll; renderMap(byDay(current)); });
@@ -824,7 +841,7 @@
     if (e.key === 'ArrowLeft' && idx > 0) go(DAYS[idx - 1].d);
   });
 
-  current = fromHash() || today() || DAYS[0].d;
+  current = fromHash() || today();
   render();
   load();
 })();
