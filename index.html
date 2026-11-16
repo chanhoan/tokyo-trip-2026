@@ -249,6 +249,12 @@
   lab.className = 'ov-label';
   lab.textContent = '↑ 그날 밤 묵는 숙소';
   ov.appendChild(lab);
+  function timeOptions(count, unit) {
+    return '<option value="">' + unit + '</option>' + Array.from({ length: count }, function (_, n) {
+      var value = String(n).padStart(2, '0');
+      return '<option value="' + value + '">' + value + unit + '</option>';
+    }).join('');
+  }
   function renderDetail(day, idx) {
     if (searchDialog && searchDialog.open) searchDialog.close();
     var html = '<div class="d-top"><div>' +
@@ -267,7 +273,9 @@
     html += '<ol class="tl" id="tl"></ol>';
     html += '<details class="add" id="add"><summary>+ 일정 추가</summary>' +
       '<form class="add-form" id="add-form">' +
-      '<label class="time-field">방문 시간<input id="f-time" type="time" required aria-label="방문 시간"></label>' +
+      '<fieldset class="time-field"><legend>방문 시간 (24시간)</legend><div class="time-selects">' +
+      '<select id="f-hour" aria-label="방문 시" required>' + timeOptions(24, '시') + '</select><span aria-hidden="true">:</span>' +
+      '<select id="f-minute" aria-label="방문 분" required>' + timeOptions(60, '분') + '</select></div></fieldset>' +
       '<div id="f-place" class="place-slot"></div>' +
       '<div id="f-picked" class="picked" hidden></div>' +
       '<input id="f-memo" class="full" placeholder="메모 (선택)" maxlength="200" aria-label="메모">' +
@@ -625,7 +633,7 @@
     if (!place) { alert('장소를 검색해서 골라 주세요.'); return; }
     var body = {
       day: current,
-      time: form.querySelector('#f-time').value,
+      time: form.querySelector('#f-hour').value + ':' + form.querySelector('#f-minute').value,
       name: place.name,
       placeId: place.placeId,
       address: place.address,
@@ -637,7 +645,8 @@
     fetch('/api/places', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then(function (r) {
         if (!r.ok) return r.json().catch(function () { return {}; }).then(function (d) { throw new Error(d.error || '추가하지 못했어요.'); });
-        form.querySelector('#f-time').value = '';
+        form.querySelector('#f-hour').value = '';
+        form.querySelector('#f-minute').value = '';
         form.querySelector('#f-memo').value = '';
         picked = null;
         showPicked();

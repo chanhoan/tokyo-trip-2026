@@ -4,6 +4,19 @@ import vm from 'node:vm';
 
 const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
 const source = html.slice(html.indexOf('  // ── place search:'), html.indexOf('  var shared = []'));
+const timeContext = vm.createContext({});
+vm.runInContext(html.slice(html.indexOf('  function timeOptions('), html.indexOf('  function renderDetail(')), timeContext);
+assert.equal(typeof timeContext.timeOptions, 'function', 'visible hour/minute choices replace native time input');
+for (const [count, label] of [[24, '시'], [60, '분']]) {
+  const options = timeContext.timeOptions(count, label);
+  assert.equal((options.match(/<option/g) || []).length, count + 1);
+  assert.ok(options.includes('<option value="">' + label + '</option>'));
+  assert.ok(options.includes('value="00"'));
+  assert.ok(options.includes('value="' + (count - 1) + '"'));
+}
+assert.ok(!html.includes('type="time"'), 'Safari cannot hide the native time UI because it is no longer used');
+assert.match(html, /id="f-hour"[^>]*required/);
+assert.match(html, /id="f-minute"[^>]*required/);
 
 class Element {
   constructor(options) { this.options = options; this.children = []; this.listeners = {}; this.style = {}; this.classList = { toggle() {} }; this.hidden = false; this.disabled = false; this.open = false; }
@@ -42,7 +55,7 @@ await context.openPlaceSearch();
 assert.equal(node('place-dialog').open, true);
 assert.ok(context.placeMap, 'map exists before any search');
 assert.equal(node('place-map').hidden, false, 'map is visible before searching');
-assert.match(html, /<label[^>]*>방문 시간.*id="f-time"/, 'time field has visible Safari-safe label');
+assert.ok(html.includes('<legend>방문 시간 (24시간)</legend>'));
 assert.ok(!html.includes('지도·사진·리뷰로 장소 찾기'), 'short button text');
 node('place-query').value = '  이치란  ';
 await context.searchPlaces();
@@ -175,4 +188,36 @@ node('place-manual').dispatch('click');
 assert.match(node('f-place').innerHTML, /id="f-name"/);
 assert.equal(context.picked, null, 'manual fallback clears previous picked place');
 assert.equal(html, readFileSync(new URL('./도쿄·후지·요코하마 동선 지도.html', import.meta.url), 'utf8'), 'local Artifact copy stays in sync');
+
+const submitSource = html.slice(html.indexOf("  detail.addEventListener('submit'"), html.indexOf("  detail.addEventListener('click'"));
+const submitTarget = new Element();
+const fields = Object.fromEntries(['f-hour', 'f-minute', 'f-name', 'f-memo', 'f-by', 'submit'].map(id => [id, { value: '', disabled: false }]));
+const form = { id: 'add-form', querySelector: selector => fields[selector === 'button[type="submit"]' ? 'submit' : selector.slice(1)] };
+let posted;
+let responseOk = true;
+const submitContext = vm.createContext({
+  detail: submitTarget, current: 5, picked: null, document: { getElementById: node },
+  localStorage: { setItem() {} }, showPicked() {}, mountPlaceInput() {}, load: async () => {}, alert() {},
+  fetch: async (_url, options) => { posted = JSON.parse(options.body); return { ok: responseOk, json: async () => ({ error: '저장 실패' }) }; }
+});
+vm.runInContext(submitSource, submitContext);
+for (const [hour, minute] of [['00', '00'], ['09', '05'], ['23', '59']]) {
+  fields['f-hour'].value = hour;
+  fields['f-minute'].value = minute;
+  fields['f-name'].value = '센소지';
+  fields['f-by'].value = '여행자';
+  submitTarget.dispatch('submit', { target: form, preventDefault() {} });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(posted.time, hour + ':' + minute, 'POST preserves padded 24-hour time');
+  assert.equal(fields['f-hour'].value, '');
+  assert.equal(fields['f-minute'].value, '');
+  assert.equal(fields['f-by'].value, '여행자', 'saving preserves nickname');
+}
+responseOk = false;
+fields['f-hour'].value = '09';
+fields['f-minute'].value = '05';
+submitTarget.dispatch('submit', { target: form, preventDefault() {} });
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(fields['f-hour'].value, '09', 'failed save preserves hour');
+assert.equal(fields['f-minute'].value, '05', 'failed save preserves minute');
 console.log('place preview: selection, cancel, races, failure and local sync OK');
