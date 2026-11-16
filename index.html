@@ -136,12 +136,12 @@
     <h2>숙소</h2>
     <div class="tbl">
       <table>
-        <thead><tr><th>숙소</th><th>날짜</th></tr></thead>
+        <thead><tr><th>숙소</th><th>날짜</th><th>상세</th></tr></thead>
         <tbody>
-          <tr><td><strong>아사쿠사</strong><div class="stay-links" data-stay="asakusa"></div></td><td class="num">12/5–12/9</td></tr>
-          <tr><td><strong>후지시</strong><div class="stay-links" data-stay="fuji"></div></td><td class="num">12/7–12/8</td></tr>
-          <tr><td><strong>요코하마</strong><div class="stay-links" data-stay="yokohama"></div></td><td class="num">12/9–12/10</td></tr>
-          <tr><td><strong>시부야</strong><div class="stay-links" data-stay="shibuya"></div></td><td class="num">12/10–12/12</td></tr>
+          <tr data-stay="asakusa"><td><strong>아사쿠사</strong><span class="route"></span></td><td class="num">12/5–12/9</td><td class="detail"></td></tr>
+          <tr data-stay="fuji"><td><strong>후지시</strong><span class="route"></span></td><td class="num">12/7–12/8</td><td class="detail"></td></tr>
+          <tr data-stay="yokohama"><td><strong>요코하마</strong><span class="route"></span></td><td class="num">12/9–12/10</td><td class="detail"></td></tr>
+          <tr data-stay="shibuya"><td><strong>시부야</strong><span class="route"></span></td><td class="num">12/10–12/12</td><td class="detail"></td></tr>
         </tbody>
       </table>
     </div>
@@ -196,8 +196,12 @@
       : '<button type="button" disabled title="정확한 숙소 주소가 확인되면 연결됩니다.">길찾기 · 주소 확인 중</button>') +
       '<a href="' + esc(st.url) + '" target="_blank" rel="noopener">숙소 상세 안내 ↗</a>';
   }
-  document.querySelectorAll('[data-stay]').forEach(function (el) {
-    el.innerHTML = stayLinks(STAYS[el.dataset.stay]);
+  document.querySelectorAll('tr[data-stay]').forEach(function (row) {
+    var st = STAYS[row.dataset.stay];
+    row.querySelector('.route').innerHTML = st.address
+      ? '<a href="' + esc(mapsUrl({ name: st.address })) + '" target="_blank" rel="noopener">길찾기 ↗</a>'
+      : '<span title="정확한 숙소 주소가 확인되면 길찾기가 연결됩니다.">주소 확인 중</span>';
+    row.querySelector('.detail').innerHTML = '<a href="' + esc(st.url) + '" target="_blank" rel="noopener">상세 안내 ↗</a>';
   });
   var DAYS = [
     { d: 5, dow: '토', title: '도착, 아사쿠사', short: '도착 · 아사쿠사', night: 'asakusa', move: ['나리타공항', '아사쿠사'],
@@ -346,14 +350,15 @@
     var rows = timelineRows(byDay(current));
     ol.innerHTML = rows.map(function (r, index) {
       if (r.item) {
-        return '<li><span class="t">' + esc(r.item[0]) + '</span><span class="x">' + esc(r.item[1]) +
-          (r.item[2] ? '<span class="pill">' + esc(r.item[2]) + '</span>' : '') +
+        return '<li><span class="t">' + esc(r.item[0]) + '</span><span class="x"><span class="txt">' + esc(r.item[1]) +
+          (r.item[2] ? '<span class="pill">' + esc(r.item[2]) + '</span>' : '') + '</span>' +
           '<span class="reorder">' + [-1, 1].map(function (step) {
             var label = step < 0 ? '위로' : '아래로';
             return '<button type="button" class="move-item" data-id="' + esc(r.id) + '" data-step="' + step +
               '" aria-label="' + esc(r.item[1]) + ' ' + label + '"' +
-              (orderSaving || loadFailed || !placesLoaded || index + step < 0 || index + step >= rows.length ? ' disabled' : '') +
-              '>' + (step < 0 ? '↑' : '↓') + '</button>';
+              (index + step < 0 || index + step >= rows.length ? ' disabled data-edge' : orderSaving || loadFailed || !placesLoaded ? ' disabled' : '') +
+              '><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="' +
+              (step < 0 ? 'M4 10l4-4 4 4' : 'M4 6l4 4 4-4') + '"/></svg></button>';
           }).join('') + '</span></span></li>';
       }
       var p = r.place;
