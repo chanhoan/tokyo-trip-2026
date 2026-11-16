@@ -1,0 +1,799 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>도쿄 여행</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: 8-day overview strip (selector + nightly stay band) → selected day: rail map beside a day timeline → full booking reference at the end. */
+:root {
+  --paper: #f5f6f4;
+  --card: #ffffff;
+  --ink: #1d2124;
+  --muted: #61686d;
+  --rule: #dde1df;
+  --soft: #eef0ed;
+  --land: #eceee9;
+  --sea: #dce9ef;
+  --accent: #c8102e;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  /* one line colour per day, rail-map style */
+  --d5: #8a6fd1; --d6: #f39700; --d7: #1d64c8; --d8: #3fa0e6;
+  --d9: #e0262e; --d10: #00a35a; --d11: #9b5b2e; --d12: #d1007f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #15181a; --card: #1e2225; --ink: #eef0ee; --muted: #a2a9ad;
+    --rule: #30363a; --soft: #262b2e; --land: #22272a; --sea: #1a2a33; --accent: #ff5a6e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #15181a; --card: #1e2225; --ink: #eef0ee; --muted: #a2a9ad;
+  --rule: #30363a; --soft: #262b2e; --land: #22272a; --sea: #1a2a33; --accent: #ff5a6e;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+.wrap {
+  max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px;
+  padding-block: 28px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+header { display: grid; gap: 4px; }
+.kicker { font-family: var(--font-mono); font-size: 13px; color: var(--muted); letter-spacing: .04em; }
+h1 { font-weight: 700; font-size: clamp(24px, 4vw, 34px); line-height: 1.25; margin: 0; text-wrap: balance; }
+h2 { font-weight: 700; font-size: 20px; margin: 0; text-wrap: balance; }
+.sec-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.hint { font-size: 13px; color: var(--muted); }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+/* ── overview strip ── */
+.ov-scroll { overflow-x: auto; padding-bottom: 4px; }
+.ov { display: grid; grid-template-columns: repeat(8, minmax(84px, 1fr)); gap: 6px; min-width: 700px; }
+.ov-day {
+  grid-row: 1; display: grid; gap: 2px; align-content: start; text-align: left; cursor: pointer;
+  background: var(--card); border: 1px solid var(--rule); border-top: 5px solid var(--c);
+  border-radius: 10px; padding: 10px 10px 12px; min-height: 96px;
+  transition: transform .15s, box-shadow .15s;
+}
+.ov-day:hover { transform: translateY(-2px); }
+.ov-day[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--c); background: color-mix(in srgb, var(--c) 8%, var(--card)); }
+.ov-date { font-family: var(--font-mono); font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums; }
+.ov-date small { font-family: var(--font-body); font-weight: 500; color: var(--muted); font-size: 12px; margin-left: 4px; }
+.ov-title { font-size: 13px; font-weight: 500; line-height: 1.35; }
+.ov-stay {
+  grid-row: 2; font-size: 12px; font-weight: 500; text-align: center; white-space: nowrap;
+  background: var(--soft); border-radius: 6px; padding: 4px 6px; color: var(--ink);
+}
+.ov-stay.none { background: transparent; color: var(--muted); border: 1px dashed var(--rule); }
+.ov-label { grid-row: 3; grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+/* ── day view ── */
+.d-body { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+#d-main, #d-side { display: grid; gap: 14px; align-content: start; min-width: 0; }
+@media (max-width: 760px) { .d-body { grid-template-columns: 1fr; } }
+.mapbox { position: relative; background: var(--land); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; min-width: 0; }
+.map-head { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; pointer-events: none; }
+.map-head > * { pointer-events: auto; }
+.map-cap { font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--rule); border-radius: 999px; padding: 5px 12px; }
+.map-cap .sw { width: 22px; height: 6px; border-radius: 3px; background: var(--c); }
+.toggle { font-size: 13px; background: var(--card); border: 1px solid var(--rule); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+.toggle[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+svg.map { display: block; width: 100%; height: 320px; }
+@media (max-width: 600px) { svg.map { height: 280px; } }
+.land { fill: var(--land); }
+.sea { fill: var(--sea); }
+.sea-label { fill: var(--muted); font: italic 500 13px var(--font-body); opacity: .8; }
+.fuji-body { fill: var(--rule); }
+.fuji-snow { fill: var(--card); }
+.fuji-label { fill: var(--muted); font: 500 13px var(--font-body); }
+.leg { fill: none; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; transition: opacity .2s, stroke-width .2s; }
+.map.filtered .leg { opacity: .1; }
+.map.filtered .leg.on { opacity: 1; stroke-width: 8; }
+.st { transition: opacity .2s; }
+.map.filtered .st { opacity: .3; }
+.map.filtered .st.on { opacity: 1; }
+.stn, .stay { fill: var(--card); stroke: var(--ink); stroke-width: 2.5; }
+.stay-core { fill: var(--ink); }
+.lbl { fill: var(--ink); font: 700 15px var(--font-body); paint-order: stroke; stroke: var(--card); stroke-width: 4px; stroke-linejoin: round; }
+.lbl-sub { fill: var(--muted); font: 500 12px var(--font-body); paint-order: stroke; stroke: var(--card); stroke-width: 4px; stroke-linejoin: round; }
+.legend { position: absolute; left: 10px; bottom: 8px; display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); background: color-mix(in srgb, var(--card) 88%, transparent); border-radius: 8px; padding: 2px 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.daycard {
+  background: var(--card); border: 1px solid var(--rule); border-radius: 14px;
+  padding: 18px 20px 20px; display: grid; gap: 16px; min-width: 0;
+  border-top: 6px solid var(--c);
+}
+@media (max-width: 600px) { .daycard { padding: 14px 14px 16px; } }
+.d-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.d-meta { font-family: var(--font-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.d-date { font-family: var(--font-mono); font-weight: 600; font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.d-date small { font-family: var(--font-body); font-size: 16px; font-weight: 500; color: var(--muted); margin-left: 6px; }
+.d-title { font-size: 20px; font-weight: 700; line-height: 1.35; margin: 4px 0 0; text-wrap: balance; }
+.nav { display: flex; gap: 6px; flex-shrink: 0; }
+.nav button {
+  width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--rule); background: var(--card);
+  cursor: pointer; font-size: 18px; line-height: 1; display: grid; place-items: center;
+}
+.nav button:hover:not(:disabled) { border-color: var(--ink); }
+.nav button:disabled { opacity: .35; cursor: default; }
+.move { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; background: var(--soft); border-radius: 8px; padding: 8px 12px; justify-self: start; }
+.move b { font-size: 12px; font-weight: 500; color: var(--muted); }
+.tl { list-style: none; margin: 0; padding: 0; display: grid; }
+.tl li { display: grid; grid-template-columns: 56px 1fr; }
+.tl .t { font-family: var(--font-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.tl .x { position: relative; border-left: 2px solid color-mix(in srgb, var(--c) 45%, transparent); padding: 0 0 14px 18px; font-size: 15px; }
+.tl li:last-child .x { border-left-color: transparent; padding-bottom: 0; }
+.tl .x::before {
+  content: ""; position: absolute; left: -7px; top: 7px; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--card); border: 3px solid var(--c);
+}
+.pill { display: inline-block; font-size: 12px; color: var(--muted); border: 1px dashed var(--muted); border-radius: 999px; padding: 0 8px; margin-left: 6px; vertical-align: 1px; }
+.boxes { display: grid; gap: 10px; }
+.box { border: 1px solid var(--rule); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; }
+.box-h { font-size: 12px; color: var(--muted); letter-spacing: .04em; }
+.bk { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 14px; }
+.bk .kind { font-size: 12px; color: var(--muted); padding-top: 2px; }
+.bk .name { font-weight: 700; }
+.bk .sub { grid-column: 2; color: var(--muted); font-size: 13px; }
+.bk + .bk { border-top: 1px solid var(--rule); padding-top: 6px; }
+.night { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.night a { font-weight: 700; font-size: 16px; }
+.night span { font-size: 13px; color: var(--muted); }
+/* ── places added by the group: rows inside .tl + the add form ── */
+.tl li.added .x::before { background: var(--c); }
+.tl li.added .x { display: grid; gap: 1px; }
+.tl li.added a { font-weight: 700; justify-self: start; }
+.tl li.added a::after { content: " ↗"; font-weight: 500; font-size: 12px; }
+.tl .addr, .tl .by { font-size: 12px; color: var(--muted); }
+.tl .memo { font-size: 14px; }
+.tl .tl-note { display: block; font-size: 13px; color: var(--muted); padding-top: 8px; }
+.del { background: none; border: 0; padding: 0 0 0 6px; color: var(--muted); font-size: 12px; text-decoration: underline; cursor: pointer; }
+.del:hover { color: var(--accent); }
+.add { border: 1px dashed var(--rule); border-radius: 10px; }
+.add summary { cursor: pointer; padding: 9px 12px; font-size: 14px; font-weight: 500; color: var(--muted); list-style: none; }
+.add summary::-webkit-details-marker { display: none; }
+.add[open] summary { color: var(--ink); }
+.add-form { display: grid; grid-template-columns: 110px 1fr; gap: 6px; padding: 0 12px 12px; }
+.add-form input, .place-slot gmp-place-autocomplete { font: inherit; font-size: 14px; min-width: 0; width: 100%; }
+.add-form input { padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); color: var(--ink); }
+.add-form .full, .add-form .picked { grid-column: 1 / -1; }
+.picked { display: grid; font-size: 13px; background: var(--soft); border-radius: 8px; padding: 6px 10px; }
+.picked span { color: var(--muted); font-size: 12px; }
+.add-form button[type="submit"] { grid-column: 1 / -1; padding: 9px; border: 0; border-radius: 8px; background: var(--c); color: #fff; font-weight: 700; cursor: pointer; }
+.add-form button:disabled { opacity: .5; cursor: default; }
+.place-open { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); text-align: left; cursor: pointer; }
+.place-dialog { width: min(1120px, calc(100% - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 1px solid var(--rule); border-radius: 16px; background: var(--card); color: var(--ink); }
+.place-dialog::backdrop { background: rgb(0 0 0 / .55); }
+body:has(.place-dialog[open]) { overflow: hidden; }
+.place-dialog-head, .place-dialog-foot { position: sticky; background: var(--card); z-index: 1; padding: 14px 18px; display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+.place-dialog-head { top: 0; border-bottom: 1px solid var(--rule); }
+.place-dialog-head button, .place-dialog-foot button { border: 1px solid var(--rule); border-radius: 8px; padding: 9px 14px; background: var(--card); cursor: pointer; }
+.place-dialog-search { padding: 14px 18px 0; }
+.place-dialog-search gmp-place-autocomplete { width: 100%; }
+.place-status { margin: 10px 18px; font-size: 14px; color: var(--muted); }
+.place-preview { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 0 18px 18px; }
+.place-map { height: 400px; border-radius: 10px; background: var(--soft); position: sticky; top: 78px; }
+.place-details { min-width: 0; }
+.place-details gmp-place-details { display: block; width: 100%; color-scheme: light dark; }
+.place-dialog-foot { bottom: 0; border-top: 1px solid var(--rule); flex-wrap: wrap; }
+.place-dialog-foot button { background: var(--accent); color: white; border-color: var(--accent); font-weight: 700; }
+.place-dialog-foot button:disabled { opacity: .5; cursor: default; }
+.place-dialog-foot .place-manual { background: var(--card); border-color: var(--rule); color: var(--ink); }
+.place-dialog-foot p { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--muted); }
+[hidden] { display: none !important; }
+@media (max-width: 760px) { .place-preview { grid-template-columns: 1fr; } .place-map { height: 240px; position: static; } }
+/* ── reference tables ── */
+.tables { display: grid; grid-template-columns: minmax(0, 1fr) max-content; gap: 24px; }
+.tables .note { contain: inline-size; }
+.tables td, .tables th { white-space: nowrap; }
+@media (max-width: 1000px) { .tables { grid-template-columns: minmax(0, 1fr); } }
+.tables > div { min-width: 0; display: grid; grid-template-rows: auto 1fr auto; }
+.tables h2 { margin-bottom: 12px; }
+.tbl { overflow-x: auto; background: var(--card); border: 1px solid var(--rule); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; height: 100%; font-size: 14px; }
+thead tr { height: 1px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+a { color: var(--accent); text-underline-offset: 3px; }
+.note { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+@media (prefers-reduced-motion: reduce) { .leg, .st, .ov-day { transition: none; } .ov-day:hover { transform: none; } }
+</style>
+<div class="wrap">
+<header>
+  <div class="kicker">2026.12.5 – 12.12 · 7박 8일</div>
+  <h1>도쿄 여행</h1>
+</header>
+<section aria-labelledby="h-ov">
+  <div class="sec-head">
+    <h2 id="h-ov">한눈에 보기</h2>
+    <span class="hint">날짜를 누르면 그날 일정과 경로가 아래에 나와요</span>
+  </div>
+  <div class="ov-scroll">
+    <div class="ov" id="ov" role="group" aria-label="날짜 선택"></div>
+  </div>
+</section>
+<article class="daycard" id="detail" aria-label="선택한 날짜">
+  <div id="d-head"></div>
+  <div class="mapbox">
+    <div class="map-head">
+      <span class="map-cap" id="map-cap"><span class="sw"></span><span></span></span>
+      <button class="toggle" id="toggle-all" aria-pressed="false">전체 경로 보기</button>
+    </div>
+    <svg class="map filtered" id="map" viewBox="0 0 1000 600" role="img" aria-label="날짜별 이동 경로 도식도">
+      <rect class="land" x="-3000" y="-3000" width="7000" height="7000"/>
+      <path class="sea" d="M-3000,560 L0,548 C170,528 350,538 450,550 C525,555 570,512 600,474 C628,432 660,384 690,346 C722,326 762,330 784,362 C800,430 776,520 806,600 L830,3000 L-3000,3000 Z"/>
+      <text class="sea-label" x="250" y="584">사가미만</text>
+      <text class="sea-label" x="700" y="440">도쿄만</text>
+      <path class="fuji-body" d="M90,330 L190,210 L290,330 Z"/>
+      <path class="fuji-snow" d="M162,244 L190,210 L218,244 L204,238 L190,250 L176,238 Z"/>
+      <text class="fuji-label" x="190" y="352" text-anchor="middle">후지산</text>
+      <g id="legs">
+        <path class="leg" data-day="5"  stroke="var(--d5)"  d="M930,196 L760,196 L640,206 L700,216"/>
+        <path class="leg" data-day="6"  stroke="var(--d6)"  d="M700,216 L640,206 L646,252 L560,320"/>
+        <path class="leg" data-day="7"  stroke="var(--d7)"  d="M700,216 L662,296 L620,362 L400,446 L122,476 L176,446"/>
+        <path class="leg" data-day="8"  stroke="var(--d8)"  d="M176,454 L122,484 L402,454 L626,368 L668,302 L707,222"/>
+        <path class="leg" data-day="9"  stroke="var(--d9)"  d="M700,216 L694,306 L640,366 L520,428 L476,470 L460,520"/>
+        <path class="leg" data-day="9"  stroke="var(--d9)"  d="M476,470 L576,430"/>
+        <path class="leg" data-day="10" stroke="var(--d10)" d="M576,430 L568,376 L560,320"/>
+        <path class="leg" data-day="11" stroke="var(--d11)" d="M560,320 L522,208 L470,106"/>
+        <path class="leg" data-day="12" stroke="var(--d12)" d="M560,312 L640,244 L634,198 L760,188 L930,188"/>
+      </g>
+      <g class="st" data-days="5 12">
+        <circle class="stn" cx="930" cy="192" r="8"/>
+        <text class="lbl" x="930" y="168" text-anchor="middle">나리타공항</text>
+        <text class="lbl-sub" x="930" y="222" text-anchor="middle">12/5 도착 · 12/12 출발</text>
+      </g>
+      <g class="st" data-days="5 6 12">
+        <circle class="stn" cx="640" cy="206" r="7"/>
+        <text class="lbl" x="628" y="190" text-anchor="end">우에노</text>
+      </g>
+      <g class="st" data-days="5 6 7 8 9">
+        <circle class="stay" cx="700" cy="216" r="11"/><circle class="stay-core" cx="700" cy="216" r="4"/>
+        <text class="lbl" x="716" y="212">아사쿠사</text>
+        <text class="lbl-sub" x="716" y="230">숙소 12/5–12/9</text>
+      </g>
+      <g class="st" data-days="6">
+        <circle class="stn" cx="646" cy="252" r="7"/>
+        <text class="lbl" x="660" y="258">아키하바라</text>
+      </g>
+      <g class="st" data-days="7 8">
+        <circle class="stn" cx="664" cy="298" r="7"/>
+        <text class="lbl" x="678" y="304">도쿄역</text>
+        <text class="lbl-sub" x="678" y="320">신칸센</text>
+      </g>
+      <g class="st" data-days="6 10 11 12">
+        <circle class="stay" cx="560" cy="318" r="11"/><circle class="stay-core" cx="560" cy="318" r="4"/>
+        <text class="lbl" x="544" y="314" text-anchor="end">시부야</text>
+        <text class="lbl-sub" x="544" y="332" text-anchor="end">숙소 12/10–12/12</text>
+      </g>
+      <g class="st" data-days="11">
+        <circle class="stn" cx="470" cy="106" r="8"/>
+        <text class="lbl" x="484" y="102">가와고에</text>
+        <text class="lbl-sub" x="484" y="120">12/11 당일치기</text>
+      </g>
+      <g class="st" data-days="9 10">
+        <circle class="stay" cx="576" cy="430" r="11"/><circle class="stay-core" cx="576" cy="430" r="4"/>
+        <text class="lbl" x="592" y="426">요코하마</text>
+        <text class="lbl-sub" x="592" y="444">숙소 12/9–12/10</text>
+      </g>
+      <g class="st" data-days="9">
+        <circle class="stn" cx="476" cy="470" r="7"/>
+        <text class="lbl" x="462" y="466" text-anchor="end">후지사와</text>
+      </g>
+      <g class="st" data-days="9">
+        <circle class="stn" cx="460" cy="522" r="8"/>
+        <text class="lbl" x="476" y="528">에노시마</text>
+      </g>
+      <g class="st" data-days="7 8">
+        <circle class="stn" cx="122" cy="480" r="8"/>
+        <text class="lbl" x="110" y="512" text-anchor="middle">신후지역</text>
+        <text class="lbl-sub" x="110" y="530" text-anchor="middle">온천 유라기노사토 근처</text>
+      </g>
+      <g class="st" data-days="7 8">
+        <circle class="stay" cx="176" cy="450" r="11"/><circle class="stay-core" cx="176" cy="450" r="4"/>
+        <text class="lbl" x="192" y="440">후지시 숙소</text>
+        <text class="lbl-sub" x="192" y="458">요시와라 · 12/7</text>
+      </g>
+    </svg>
+    <div class="legend">
+      <span><svg width="22" height="22" aria-hidden="true"><circle cx="11" cy="11" r="8" fill="var(--card)" stroke="var(--ink)" stroke-width="2.5"/><circle cx="11" cy="11" r="3" fill="var(--ink)"/></svg>숙소</span>
+      <span><svg width="22" height="22" aria-hidden="true"><circle cx="11" cy="11" r="6" fill="var(--card)" stroke="var(--ink)" stroke-width="2.5"/></svg>들르는 곳·환승역</span>
+      <span>실제 축척이 아닌 도식도</span>
+    </div>
+  </div>
+  <div class="d-body">
+    <div id="d-main"></div>
+    <aside id="d-side"></aside>
+  </div>
+</article>
+<section class="tables" aria-label="예약 정보 전체">
+  <div>
+    <h2>교통 예약</h2>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>날짜</th><th>편명</th><th>구간·시간</th><th>좌석·예약번호</th></tr></thead>
+        <tbody>
+          <tr><td class="num">12/5</td><td>MM642</td><td>인천 T1 12:40 → 나리타 15:15</td><td>–</td></tr>
+          <tr><td class="num">12/7</td><td>고다마 817</td><td>도쿄 10:27 → 신후지 11:32</td><td>14호차 5-B,C,D,E · 2000</td></tr>
+          <tr><td class="num">12/8</td><td>고다마 822</td><td>신후지 14:13 → 도쿄 15:18</td><td>13호차 5-B,C,D,E · 2001</td></tr>
+          <tr><td class="num">12/12</td><td>WE504</td><td>나리타 15:05 → 인천 18:00</td><td>–</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">스카이라이너는 12/5(나리타→우에노)와 12/12(우에노→나리타) 모두 미리 온라인으로 사두세요.</p>
+  </div>
+  <div>
+    <h2>숙소</h2>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>숙소</th><th>날짜</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://www.airbnb.co.kr/rooms/1252584854885560088">아사쿠사</a></td><td class="num">12/5–12/9</td></tr>
+          <tr><td><a href="https://www.airbnb.co.kr/rooms/1052017132403984548">후지시</a></td><td class="num">12/7–12/8</td></tr>
+          <tr><td><a href="https://www.airbnb.co.kr/rooms/1474390371760984472">요코하마</a></td><td class="num">12/9–12/10</td></tr>
+          <tr><td><a href="https://www.airbnb.co.kr/rooms/1780180127620391752">시부야</a></td><td class="num">12/10–12/12</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">체크인 시간과 짐 보관 가능 여부는 호스트에게 확인하세요.</p>
+  </div>
+</section>
+</div>
+<dialog id="place-dialog" class="place-dialog" lang="ko" aria-labelledby="place-title">
+  <div class="place-dialog-head">
+    <h2 id="place-title">지도에서 장소 찾기</h2>
+    <button type="button" id="place-close" aria-label="장소 검색 닫기">닫기</button>
+  </div>
+  <div id="place-search" class="place-dialog-search"></div>
+  <p id="place-status" class="place-status" role="status" aria-live="polite">장소를 검색하면 지도와 상세 정보가 나와요.</p>
+  <div class="place-preview">
+    <div id="place-map" class="place-map" role="region" aria-label="선택한 장소의 실제 위치" hidden></div>
+    <div id="place-details" class="place-details"></div>
+  </div>
+  <div class="place-dialog-foot">
+    <a id="place-external" target="_blank" rel="noopener" hidden>Google Maps에서 더 보기 ↗</a>
+    <button id="place-manual" class="place-manual" type="button" hidden>장소 이름 직접 입력</button>
+    <button id="place-choose" type="button" disabled>이 장소 선택</button>
+    <p>사진·리뷰·영업시간·가격대는 Google에서 제공하는 범위로 표시돼요. 전체 메뉴와 메뉴별 가격은 제공되지 않을 수 있어요.</p>
+  </div>
+</dialog>
+<script>
+(function () {
+  var STAYS = {
+    asakusa:  { name: '아사쿠사', url: 'https://www.airbnb.co.kr/rooms/1252584854885560088', note: '12/5–12/9 · 4박' },
+    fuji:     { name: '후지시',   url: 'https://www.airbnb.co.kr/rooms/1052017132403984548', note: '요시와라혼초역 근처 · 셀프 체크인' },
+    yokohama: { name: '요코하마', url: 'https://www.airbnb.co.kr/rooms/1474390371760984472', note: '12/9–12/10 · 1박' },
+    shibuya:  { name: '시부야',   url: 'https://www.airbnb.co.kr/rooms/1780180127620391752', note: '12/10–12/12 · 2박' }
+  };
+  var DAYS = [
+    { d: 5, dow: '토', title: '도착, 아사쿠사', short: '도착 · 아사쿠사', night: 'asakusa', move: ['나리타공항', '아사쿠사'],
+      items: [['12:40', '인천 T1 출발 (MM642)'], ['15:15', '나리타 도착, 입국 약 1시간'], ['저녁', '스카이라이너로 우에노, 긴자선으로 아사쿠사'], ['밤', '센소지 야경, 스카이트리']],
+      book: [['항공', 'MM642', '인천 T1 12:40 → 나리타 15:15'], ['열차', '스카이라이너', '나리타 → 우에노 · 온라인으로 미리 구매']] },
+    { d: 6, dow: '일', title: '아키하바라, 시부야', short: '아키하바라 · 시부야', night: 'asakusa',
+      items: [['오전', '아키하바라 (일요일 오후 차 없는 거리)'], ['오후', '시부야 스크램블 교차로'], ['밤', '시부야 스카이 야경'], ['이동', '긴자선 (아키하바라는 스에히로초역에서 도보 약 5분)']] },
+    { d: 7, dow: '월', title: '신칸센으로 후지산 남쪽', short: '후지산 남쪽', night: 'fuji', move: ['아사쿠사', '후지시'], moveNote: '캐리어는 아사쿠사 숙소에 두고 1박 짐만',
+      items: [['09:50', '1박 짐만 챙겨 아사쿠사 출발'], ['10:27', '도쿄역 고다마 817 탑승'], ['11:32', '신후지 도착, 야키소바 점심'], ['오후', '후지 드림 브리지 등 뷰 스팟'], ['저녁', '온천 유라기노사토, 숙소 체크인']],
+      book: [['신칸센', '고다마 817', '도쿄 10:27 → 신후지 11:32 · 14호차 5-B,C,D,E · 예약 2000']] },
+    { d: 8, dow: '화', title: '아침 후지산, 도쿄 복귀', short: '후지산 · 도쿄 복귀', night: 'asakusa', move: ['후지시', '아사쿠사'],
+      items: [['아침', '숙소에서 후지산 감상'], ['13:45', '택시로 신후지역 (약 10분)'], ['14:13', '고다마 822 탑승'], ['15:18', '도쿄역 도착, 아사쿠사로']],
+      book: [['신칸센', '고다마 822', '신후지 14:13 → 도쿄 15:18 · 13호차 5-B,C,D,E · 예약 2001']] },
+    { d: 9, dow: '수', title: '에노시마, 요코하마', short: '에노시마 · 요코하마', night: 'yokohama', move: ['아사쿠사', '요코하마'],
+      items: [['오전', '아사쿠사 체크아웃'], ['낮', '에노시마'], ['오후', '요코하마 관광: 아카렌가 창고', '나머지 미정']] },
+    { d: 10, dow: '목', title: '요코하마 점심, 도쿄 복귀', short: '요코하마 · 도쿄', night: 'shibuya', move: ['요코하마', '시부야'],
+      items: [['오전', '요코하마 체크아웃'], ['점심', '요코하마에서 점심'], ['오후', '도쿄로 이동, 시부야 숙소 체크인'], ['저녁', '도쿄 관광']] },
+    { d: 11, dow: '금', title: '가와고에, 도쿄', short: '가와고에 · 도쿄', night: 'shibuya',
+      items: [['오전', '후쿠토신선→도부 도조선 직통, 약 1시간'], ['낮', '구라즈쿠리 거리, 가시야요코초'], ['오후', '신주쿠·하라주쿠 자유일정']] },
+    { d: 12, dow: '토', title: '귀국', short: '귀국', night: null, move: ['시부야', '나리타공항'],
+      items: [['10:30', '시부야 체크아웃, 긴자선으로 우에노'], ['이동', '스카이라이너로 나리타 (총 약 1시간 30분)'], ['12:30', '공항 도착'], ['15:05', 'WE504 출발, 18:00 인천 도착']],
+      book: [['열차', '스카이라이너', '우에노 → 나리타 · 온라인으로 미리 구매'], ['항공', 'WE504', '나리타 15:05 → 인천 18:00']] }
+  ];
+  var ov = document.getElementById('ov');
+  var detail = document.getElementById('detail');
+  var map = document.getElementById('map');
+  var cap = document.getElementById('map-cap');
+  var toggle = document.getElementById('toggle-all');
+  var legs = map.querySelectorAll('.leg');
+  var stations = map.querySelectorAll('.st');
+  var current = DAYS[0].d;
+  var showAll = false;
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function color(d) { return 'var(--d' + d + ')'; }
+  function byDay(d) { return DAYS.filter(function (x) { return x.d === d; })[0]; }
+  // overview: day buttons on row 1, nightly stay band (merged runs) on row 2
+  DAYS.forEach(function (day, i) {
+    var b = document.createElement('button');
+    b.className = 'ov-day';
+    b.dataset.day = day.d;
+    b.style.setProperty('--c', color(day.d));
+    b.style.gridColumn = String(i + 1);
+    b.innerHTML = '<span class="ov-date">12/' + day.d + '<small>' + day.dow + '</small></span><span class="ov-title">' + esc(day.short) + '</span>';
+    b.addEventListener('click', function () { go(day.d); });
+    ov.appendChild(b);
+  });
+  for (var i = 0; i < DAYS.length;) {
+    var j = i;
+    while (j + 1 < DAYS.length && DAYS[j + 1].night === DAYS[i].night) j++;
+    var s = document.createElement('div');
+    s.className = 'ov-stay' + (DAYS[i].night ? '' : ' none');
+    s.style.gridColumn = (i + 1) + ' / ' + (j + 2);
+    s.textContent = DAYS[i].night ? STAYS[DAYS[i].night].name : '귀국';
+    ov.appendChild(s);
+    i = j + 1;
+  }
+  var lab = document.createElement('div');
+  lab.className = 'ov-label';
+  lab.textContent = '↑ 그날 밤 묵는 숙소';
+  ov.appendChild(lab);
+  function renderDetail(day, idx) {
+    if (searchDialog && searchDialog.open) searchDialog.close();
+    var html = '<div class="d-top"><div>' +
+      '<div class="d-meta">' + (idx + 1) + '일차 / 8일</div>' +
+      '<div class="d-date">12/' + day.d + '<small>' + day.dow + '요일</small></div>' +
+      '<h2 class="d-title">' + esc(day.title) + '</h2></div>' +
+      '<div class="nav"><button id="prev" aria-label="이전 날"' + (idx === 0 ? ' disabled' : '') + '>‹</button>' +
+      '<button id="next" aria-label="다음 날"' + (idx === DAYS.length - 1 ? ' disabled' : '') + '>›</button></div></div>';
+    var head = html;
+    html = '';
+    var side = '';
+    if (day.move) {
+      side += '<div class="move"><b>숙소 이동</b>' + esc(day.move[0]) + ' → ' + esc(day.move[1]) +
+        (day.moveNote ? '<b>' + esc(day.moveNote) + '</b>' : '') + '</div>';
+    }
+    html += '<ol class="tl" id="tl"></ol>';
+    html += '<details class="add" id="add"><summary>+ 일정 추가</summary>' +
+      '<form class="add-form" id="add-form">' +
+      '<input id="f-time" type="time" required aria-label="시간">' +
+      '<div id="f-place" class="place-slot"></div>' +
+      '<div id="f-picked" class="picked" hidden></div>' +
+      '<input id="f-memo" class="full" placeholder="메모 (선택)" maxlength="200" aria-label="메모">' +
+      '<input id="f-by" class="full" placeholder="닉네임" maxlength="20" required aria-label="닉네임">' +
+      '<button type="submit">12/' + day.d + ' 일정에 추가</button></form></details>';
+    side += '<div class="boxes">';
+    if (day.book) {
+      side += '<div class="box"><div class="box-h">이날 예약</div>' + day.book.map(function (b) {
+        return '<div class="bk"><span class="kind">' + esc(b[0]) + '</span><span class="name">' + esc(b[1]) + '</span><span class="sub">' + esc(b[2]) + '</span></div>';
+      }).join('') + '</div>';
+    }
+    var st = day.night && STAYS[day.night];
+    side += '<div class="box"><div class="box-h">오늘 밤</div><div class="night">' +
+      (st ? '<a href="' + st.url + '">' + st.name + '</a><span>' + st.note + '</span>' : '<strong>귀국, 인천 도착</strong>') +
+      '</div></div></div>';
+    document.getElementById('d-head').innerHTML = head;
+    document.getElementById('d-main').innerHTML = html;
+    document.getElementById('d-side').innerHTML = side;
+    detail.style.setProperty('--c', color(day.d));
+    document.getElementById('prev').addEventListener('click', function () { go(DAYS[idx - 1].d); });
+    document.getElementById('next').addEventListener('click', function () { go(DAYS[idx + 1].d); });
+    try { document.getElementById('f-by').value = localStorage.getItem('nick') || ''; } catch (e) { /* nickname memory is optional */ }
+    picked = null;
+    mountPlaceInput();
+    renderTimeline();
+  }
+  // ── timeline: fixed plan + places the group added, sorted by time ──
+  // Fixed items use labels like "오전"; map them to minutes so added "HH:MM" items slot in between.
+  var SLOT = { '아침': 420, '오전': 540, '점심': 720, '낮': 750, '오후': 840, '해질녘': 990, '저녁': 1080, '밤': 1200 };
+  function minutesOf(label, prev) {
+    var m = /^(\d{1,2}):(\d{2})$/.exec(label);
+    if (m) return Number(m[1]) * 60 + Number(m[2]);
+    return Object.prototype.hasOwnProperty.call(SLOT, label) ? SLOT[label] : prev; // "이동" etc. stay after the previous row
+  }
+  function timelineRows(day) {
+    var prev = 0;
+    var rows = day.items.map(function (it, i) {
+      prev = minutesOf(it[0], prev);
+      return { k: prev, order: i, item: it };
+    });
+    shared.filter(function (p) { return p.day === day.d; }).forEach(function (p) {
+      rows.push({ k: minutesOf(p.time, 9999), order: 1000 + p.at, place: p });
+    });
+    return rows.sort(function (a, b) { return a.k - b.k || a.order - b.order; });
+  }
+  function mapsUrl(p) {
+    return 'https://www.google.com/maps/dir/?api=1&travelmode=transit&destination=' + encodeURIComponent(p.name) +
+      (p.placeId ? '&destination_place_id=' + encodeURIComponent(p.placeId) : '');
+  }
+  function renderTimeline() {
+    var ol = document.getElementById('tl');
+    if (!ol) return;
+    ol.innerHTML = timelineRows(byDay(current)).map(function (r) {
+      if (r.item) {
+        return '<li><span class="t">' + esc(r.item[0]) + '</span><span class="x">' + esc(r.item[1]) +
+          (r.item[2] ? '<span class="pill">' + esc(r.item[2]) + '</span>' : '') + '</span></li>';
+      }
+      var p = r.place;
+      return '<li class="added"><span class="t">' + esc(p.time) + '</span><span class="x">' +
+        '<a href="' + mapsUrl(p) + '" target="_blank" rel="noopener">' + esc(p.name) + '</a>' +
+        (p.address ? '<span class="addr">' + esc(p.address) + '</span>' : '') +
+        (p.memo ? '<span class="memo">' + esc(p.memo) + '</span>' : '') +
+        '<span class="by">' + esc(p.by) + ' 추가 <button class="del" type="button" data-id="' + esc(p.id) + '" data-name="' + esc(p.name) + '" aria-label="' + esc(p.name) + ' 지우기">지우기</button></span>' +
+        '</span></li>';
+    }).join('') + (loadFailed ? '<li class="tl-note">함께 추가한 일정을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.</li>' : '');
+  }
+  // ── place search: native Google details inside a dialog, plain text when no key is configured ──
+  var picked = null;   // { name, placeId, address } chosen from Google
+  var mapsReady = null; // Promise<boolean>
+  var searchDialog = document.getElementById('place-dialog');
+  var candidate = null;
+  var previewRequest = 0;
+  var placeMap = null;
+  var placeMarker = null;
+  var detailTimer = null;
+  searchDialog.addEventListener('close', function () {
+    previewRequest++;
+    candidate = null;
+    clearTimeout(detailTimer);
+    document.getElementById('place-details').replaceChildren();
+  });
+  document.getElementById('place-close').addEventListener('click', function () { searchDialog.close(); });
+  document.getElementById('place-manual').addEventListener('click', function () {
+    searchDialog.close();
+    picked = null;
+    showPicked();
+    document.getElementById('f-place').innerHTML = '<input id="f-name" placeholder="장소 이름" maxlength="80" aria-label="장소 이름">';
+    document.getElementById('f-name').focus();
+  });
+  document.getElementById('place-choose').addEventListener('click', function () {
+    if (!candidate) return;
+    picked = candidate;
+    showPicked();
+    searchDialog.close();
+    document.getElementById('f-memo').focus();
+  });
+  function loadMaps() {
+    if (mapsReady) return mapsReady;
+    mapsReady = fetch('/api/config').then(function (r) { return r.ok ? r.json() : {}; }).then(function (cfg) {
+      if (!cfg.mapsKey) return false;
+      return new Promise(function (resolve) {
+        var timer = setTimeout(function () { resolve(false); }, 15000);
+        window.__mapsLoaded = function () { clearTimeout(timer); resolve(true); };
+        var s = document.createElement('script');
+        s.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(cfg.mapsKey) +
+          '&libraries=places&language=ko&region=JP&v=weekly&loading=async&callback=__mapsLoaded';
+        s.async = true;
+        s.onerror = function () { clearTimeout(timer); console.error('Google Maps script failed to load'); resolve(false); };
+        document.head.appendChild(s);
+      });
+    }).catch(function () { return false; });
+    return mapsReady;
+  }
+  function showPicked() {
+    var box = document.getElementById('f-picked');
+    if (!box) return;
+    box.hidden = !picked;
+    box.innerHTML = picked ? '<b>' + esc(picked.name) + '</b>' + (picked.address ? '<span>' + esc(picked.address) + '</span>' : '') : '';
+  }
+  function mountPlaceInput() {
+    var slot = document.getElementById('f-place');
+    slot.innerHTML = '<input id="f-name" placeholder="장소 이름" maxlength="80" aria-label="장소 이름">';
+    loadMaps().then(function (ok) {
+      if (!ok || !document.body.contains(slot) || !google.maps.places.PlaceAutocompleteElement) return;
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'place-open';
+      button.textContent = '지도·사진·리뷰로 장소 찾기';
+      button.addEventListener('click', openPlaceSearch);
+      slot.replaceChildren(button);
+    });
+  }
+  function openPlaceSearch() {
+    candidate = null;
+    document.getElementById('place-choose').disabled = true;
+    document.getElementById('place-choose').textContent = '12/' + current + ' 일정에 이 장소 선택';
+    document.getElementById('place-external').hidden = true;
+    document.getElementById('place-manual').hidden = true;
+    document.getElementById('place-map').hidden = true;
+    document.getElementById('place-status').textContent = '한국어로 장소를 검색하세요. 지도에서 위치를 보고 사진·리뷰·가격대를 비교할 수 있어요.';
+    var pac = new google.maps.places.PlaceAutocompleteElement({
+      includedRegionCodes: ['jp'], requestedLanguage: 'ko', requestedRegion: 'jp',
+      locationBias: { south: 35.0, west: 138.4, north: 36.0, east: 140.4 }
+    });
+    pac.setAttribute('placeholder', '예: 아사쿠사 이치란, 시부야 카페');
+    pac.addEventListener('gmp-select', function (e) { previewPlace(e.placePrediction.toPlace()); });
+    pac.addEventListener('gmp-error', function () {
+      document.getElementById('place-status').textContent = '검색에 연결하지 못했어요. 다시 검색하거나 장소 이름을 직접 입력해 주세요.';
+      document.getElementById('place-manual').hidden = false;
+    });
+    document.getElementById('place-search').replaceChildren(pac);
+    searchDialog.showModal();
+    pac.focus();
+  }
+  async function previewPlace(place) {
+    var request = ++previewRequest;
+    var status = document.getElementById('place-status');
+    var choose = document.getElementById('place-choose');
+    var mapBox = document.getElementById('place-map');
+    clearTimeout(detailTimer);
+    candidate = null;
+    choose.disabled = true;
+    mapBox.hidden = true;
+    document.getElementById('place-external').hidden = true;
+    document.getElementById('place-details').replaceChildren();
+    status.textContent = '장소와 상세 정보를 불러오는 중…';
+    try {
+      await place.fetchFields({ fields: ['id', 'displayName', 'formattedAddress', 'location'] });
+      if (request !== previewRequest || !searchDialog.open) return;
+      candidate = { name: place.displayName, placeId: place.id, address: place.formattedAddress || '' };
+      choose.disabled = false;
+      var external = document.getElementById('place-external');
+      external.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(candidate.name) + '&query_place_id=' + encodeURIComponent(candidate.placeId);
+      external.hidden = false;
+      if (!google.maps.places.PlaceDetailsElement) throw new Error('Places UI Kit is unavailable');
+      var widget = new google.maps.places.PlaceDetailsElement();
+      widget.append(new google.maps.places.PlaceDetailsPlaceRequestElement({ place: place }), new google.maps.places.PlaceAllContentElement());
+      widget.addEventListener('gmp-load', function () {
+        if (request !== previewRequest || !searchDialog.open) return;
+        clearTimeout(detailTimer);
+        status.textContent = candidate.name + ' · 지도와 상세 정보를 확인한 뒤 아래에서 선택하세요.';
+      });
+      widget.addEventListener('gmp-error', function () {
+        if (request !== previewRequest || !searchDialog.open) return;
+        clearTimeout(detailTimer);
+        status.textContent = '상세 정보를 불러오지 못했어요. 다시 검색하거나 Google Maps에서 이 장소를 바로 확인할 수 있어요.';
+      });
+      detailTimer = setTimeout(function () {
+        if (request === previewRequest && searchDialog.open) status.textContent = '상세 정보 연결이 늦어지고 있어요. 다시 검색하거나 Google Maps에서 이 장소를 확인해 주세요.';
+      }, 15000);
+      document.getElementById('place-details').replaceChildren(widget);
+      if (place.location) {
+        var libraries = await Promise.all([google.maps.importLibrary('maps'), google.maps.importLibrary('marker')]);
+        if (request !== previewRequest || !searchDialog.open) return;
+        mapBox.hidden = false;
+        if (!placeMap) placeMap = new libraries[0].Map(mapBox, { center: place.location, zoom: 16, mapId: 'DEMO_MAP_ID', mapTypeControl: false, streetViewControl: false });
+        placeMap.setCenter(place.location);
+        placeMap.setZoom(16);
+        if (placeMarker) placeMarker.map = null;
+        placeMarker = new libraries[1].AdvancedMarkerElement({ map: placeMap, position: place.location, title: place.displayName });
+      }
+    } catch (err) {
+      if (request !== previewRequest || !searchDialog.open) return;
+      clearTimeout(detailTimer);
+      console.error('place preview failed', err);
+      status.textContent = '장소 정보를 불러오지 못했어요. 다시 검색해 주세요.';
+    }
+  }
+  var shared = [];
+  var loadFailed = false;
+  var POLL_MS = 20000;
+  function load() {
+    return fetch('/api/places', { cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) { shared = d.places || []; loadFailed = false; renderTimeline(); })
+      .catch(function (err) { console.error('load places failed', err); loadFailed = true; renderTimeline(); });
+  }
+  detail.addEventListener('submit', function (e) {
+    if (e.target.id !== 'add-form') return;
+    e.preventDefault();
+    var form = e.target;
+    var btn = form.querySelector('button[type="submit"]');
+    var typed = form.querySelector('#f-name');
+    var place = picked || (typed && typed.value.trim() ? { name: typed.value.trim(), placeId: '', address: '' } : null);
+    if (!place) { alert('장소를 검색해서 골라 주세요.'); return; }
+    var body = {
+      day: current,
+      time: form.querySelector('#f-time').value,
+      name: place.name,
+      placeId: place.placeId,
+      address: place.address,
+      memo: form.querySelector('#f-memo').value.trim(),
+      by: form.querySelector('#f-by').value.trim()
+    };
+    try { localStorage.setItem('nick', body.by); } catch (err) { /* optional */ }
+    btn.disabled = true;
+    fetch('/api/places', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) {
+        if (!r.ok) return r.json().catch(function () { return {}; }).then(function (d) { throw new Error(d.error || '추가하지 못했어요.'); });
+        form.querySelector('#f-time').value = '';
+        form.querySelector('#f-memo').value = '';
+        picked = null;
+        showPicked();
+        mountPlaceInput();
+        document.getElementById('add').open = false;
+        return load();
+      })
+      .catch(function (err) { alert(err.message || '추가하지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.'); })
+      .then(function () { btn.disabled = false; });
+  });
+  detail.addEventListener('click', function (e) {
+    var del = e.target.closest('.del');
+    if (!del || !confirm('"' + del.dataset.name + '"을(를) 지울까요? 모두의 화면에서 지워져요.')) return;
+    fetch('/api/places?id=' + encodeURIComponent(del.dataset.id), { method: 'DELETE' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return load(); })
+      .catch(function () { alert('지우지 못했어요. 다시 시도해 주세요.'); });
+  });
+  setInterval(function () { if (!document.hidden) load(); }, POLL_MS);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) load(); });
+  var FULL = { x: 0, y: 0, width: 1000, height: 600 };
+  var MAX_ZOOM = 1.3; // keeps labels from growing past ~20px
+  var vb = { x: 0, y: 0, w: 1000, h: 600 };
+  var vbAnim = 0;
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function dayBox(d) {
+    var els = Array.prototype.filter.call(legs, function (l) { return l.dataset.day === String(d); })
+      .concat(Array.prototype.filter.call(stations, function (g) { return g.dataset.days.split(' ').indexOf(String(d)) !== -1; }));
+    var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    els.forEach(function (el) {
+      var b = el.getBBox();
+      x1 = Math.min(x1, b.x); y1 = Math.min(y1, b.y); x2 = Math.max(x2, b.x + b.width); y2 = Math.max(y2, b.y + b.height);
+    });
+    return isFinite(x1) ? { x: x1, y: y1, width: x2 - x1, height: y2 - y1 } : FULL;
+  }
+  function fitBox(b, pad) {
+    var r = map.getBoundingClientRect();
+    var aspect = r.width && r.height ? r.width / r.height : 1000 / 600;
+    var x = b.x - pad, y = b.y - pad, w = b.width + pad * 2, hh = b.height + pad * 2;
+    var minW = r.width ? r.width / MAX_ZOOM : 0;
+    if (w < minW) { x -= (minW - w) / 2; w = minW; }
+    if (w / hh < aspect) { var nw = hh * aspect; x -= (nw - w) / 2; w = nw; }
+    else { var nh = w / aspect; y -= (nh - hh) / 2; hh = nh; }
+    return { x: x, y: y, w: w, h: hh };
+  }
+  function setViewBox(t, animate) {
+    cancelAnimationFrame(vbAnim);
+    function apply(v) { map.setAttribute('viewBox', [v.x, v.y, v.w, v.h].map(function (n) { return n.toFixed(1); }).join(' ')); }
+    if (!animate || reduceMotion) { vb = t; apply(t); return; }
+    var from = vb, start = performance.now(), DUR = 380;
+    (function step(now) {
+      var p = Math.min(1, (now - start) / DUR), e = 1 - Math.pow(1 - p, 3);
+      vb = { x: from.x + (t.x - from.x) * e, y: from.y + (t.y - from.y) * e, w: from.w + (t.w - from.w) * e, h: from.h + (t.h - from.h) * e };
+      apply(vb);
+      if (p < 1) vbAnim = requestAnimationFrame(step);
+    })(start);
+  }
+  function renderMap(day, animate) {
+    setViewBox(showAll ? fitBox(FULL, 10) : fitBox(dayBox(day.d), 40), animate !== false);
+    map.classList.toggle('filtered', !showAll);
+    legs.forEach(function (l) { l.classList.toggle('on', l.dataset.day === String(day.d)); });
+    stations.forEach(function (g) { g.classList.toggle('on', g.dataset.days.split(' ').indexOf(String(day.d)) !== -1); });
+    cap.style.setProperty('--c', color(day.d));
+    cap.lastElementChild.textContent = showAll ? '전체 경로' : '12/' + day.d + ' ' + day.dow + ' 이동 경로';
+    toggle.setAttribute('aria-pressed', String(showAll));
+  }
+
+  function render() {
+    var day = byDay(current);
+    var idx = DAYS.indexOf(day);
+    ov.querySelectorAll('.ov-day').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.day === String(current))); });
+    renderDetail(day, idx);
+    renderMap(day);
+  }
+
+  function go(d) {
+    current = d;
+    showAll = false;
+    try { history.replaceState(null, '', '#d' + d); } catch (e) { /* hash is a convenience only */ }
+    render();
+  }
+
+  function fromHash() {
+    var m = /^#d(\d+)$/.exec(location.hash);
+    return m && byDay(Number(m[1])) ? Number(m[1]) : null;
+  }
+  function today() {
+    var n = new Date();
+    return n.getFullYear() === 2026 && n.getMonth() === 11 && byDay(n.getDate()) ? n.getDate() : null;
+  }
+
+  toggle.addEventListener('click', function () { showAll = !showAll; renderMap(byDay(current)); });
+  window.addEventListener('resize', function () { renderMap(byDay(current), false); });
+  window.addEventListener('hashchange', function () { var h = fromHash(); if (h) { current = h; render(); } });
+  document.addEventListener('keydown', function (e) {
+    if (searchDialog.open) return;
+    if (e.target.closest && e.target.closest('input, textarea')) return;
+    var idx = DAYS.indexOf(byDay(current));
+    if (e.key === 'ArrowRight' && idx < DAYS.length - 1) go(DAYS[idx + 1].d);
+    if (e.key === 'ArrowLeft' && idx > 0) go(DAYS[idx - 1].d);
+  });
+
+  current = fromHash() || today() || DAYS[0].d;
+  render();
+  load();
+})();
+</script>

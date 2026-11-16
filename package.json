@@ -1,0 +1,11 @@
+{
+  "name": "tokyo-trip",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node places.check.mjs && node places-ui.check.mjs"
+  },
+  "dependencies": {
+    "@upstash/redis": "^1.34.0"
+  }
+}
