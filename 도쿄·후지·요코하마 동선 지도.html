@@ -652,8 +652,7 @@
     document.getElementById('place-query').value = '';
     document.getElementById('place-status').textContent = '지도를 불러오는 중…';
     setSheet('peek');
-    searchDialog.showModal();
-    document.getElementById('place-query').focus();
+    searchDialog.showModal(); // no auto-focus on the search box: it would pop the phone keyboard over the map
     try {
       await initPlaceMap();
       if (request !== searchRequest || !searchDialog.open) return;
