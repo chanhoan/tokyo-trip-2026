@@ -554,26 +554,35 @@
     placeMap.panTo(location);
     placeMap.panBy((p.right - p.left) / 2, (p.bottom - p.top) / 2);
   }
-  // ── my location: centre on the viewer only when they are already in Japan ──
+  // ── my location: asked on page load, used to centre the search map (only when the viewer is in Japan) ──
+  var myPos = null;
   var meMarker = null;
   // ponytail: rough box around Honshu–Kyushu (excludes Korea); Okinawa/Hokkaido edges don't matter for this trip
   function inJapan(p) { return p.lat > 30 && p.lat < 46 && p.lng > 129.5 && p.lng < 146; }
-  function locateMe(request) {
+  function requestMyPos(onFix) {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(function (pos) {
-      if (request !== searchRequest || !searchDialog.open) return;
-      var p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      if (!inJapan(p)) return;
-      if (meMarker) meMarker.position = p;
-      else {
-        var dot = document.createElement('div');
-        dot.className = 'me-dot';
-        meMarker = new mapLibraries[1].AdvancedMarkerElement({ map: placeMap, position: p, title: '내 위치', content: dot });
-      }
-      placeMap.setCenter(p);
-      placeMap.setZoom(15);
+      myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      if (onFix) onFix();
     }, function () { /* denied or unavailable: the Tokyo default centre is the fallback */ }, { timeout: 10000, maximumAge: 300000 });
   }
+  function centerOnMe(request) {
+    if (!myPos || !inJapan(myPos) || request !== searchRequest || !searchDialog.open) return;
+    if (meMarker) meMarker.position = myPos;
+    else {
+      var dot = document.createElement('div');
+      dot.className = 'me-dot';
+      meMarker = new mapLibraries[1].AdvancedMarkerElement({ map: placeMap, position: myPos, title: '내 위치', content: dot });
+    }
+    placeMap.setCenter(myPos);
+    placeMap.setZoom(15);
+  }
+  // Uses the fix taken on page load right away, then refreshes it (no prompt once permission is granted).
+  function locateMe(request) {
+    centerOnMe(request);
+    requestMyPos(function () { centerOnMe(request); });
+  }
+  requestMyPos();
   async function openPlaceSearch() {
     var request = ++searchRequest;
     resetPreview();

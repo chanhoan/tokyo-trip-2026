@@ -41,14 +41,16 @@ const sdk = {
     : { LatLngBounds: class { extend() {} } }
 };
 let geoFix = { latitude: 37.56, longitude: 126.97 }; // Seoul: outside Japan
+let geoCalls = 0;
 const context = vm.createContext({
   document: { getElementById: node, createElement: () => new Element(), body: { contains: () => true } },
   google: { maps: sdk }, window: {}, current: 5, console: { error() {} },
   esc: value => String(value).replaceAll('<', '&lt;'),
   setTimeout, clearTimeout, fetch: async () => ({ ok: true, json: async () => ({}) }),
-  navigator: { geolocation: { getCurrentPosition: success => success({ coords: geoFix }) } }
+  navigator: { geolocation: { getCurrentPosition: success => { geoCalls++; success({ coords: geoFix }); } } }
 });
 vm.runInContext(source, context);
+assert.equal(geoCalls, 1, 'location is requested on page load, before the search opens');
 assert.equal(typeof context.previewPlace, 'function', 'rich preview is available');
 
 const place = name => ({ id: 'ChIJ_' + name, displayName: name, formattedAddress: '도쿄',
