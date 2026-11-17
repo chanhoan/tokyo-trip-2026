@@ -136,12 +136,12 @@
     <h2>숙소</h2>
     <div class="tbl">
       <table>
-        <thead><tr><th>숙소</th><th>날짜</th></tr></thead>
+        <thead><tr><th>숙소</th><th>날짜</th><th>상세</th></tr></thead>
         <tbody>
-          <tr><td><strong>아사쿠사</strong><div class="stay-links" data-stay="asakusa"></div></td><td class="num">12/5–12/9</td></tr>
-          <tr><td><strong>후지시</strong><div class="stay-links" data-stay="fuji"></div></td><td class="num">12/7–12/8</td></tr>
-          <tr><td><strong>요코하마</strong><div class="stay-links" data-stay="yokohama"></div></td><td class="num">12/9–12/10</td></tr>
-          <tr><td><strong>시부야</strong><div class="stay-links" data-stay="shibuya"></div></td><td class="num">12/10–12/12</td></tr>
+          <tr data-stay="asakusa"><td><strong>아사쿠사</strong><span class="route"></span></td><td class="num">12/5–12/9</td><td class="detail"></td></tr>
+          <tr data-stay="fuji"><td><strong>후지시</strong><span class="route"></span></td><td class="num">12/7–12/8</td><td class="detail"></td></tr>
+          <tr data-stay="yokohama"><td><strong>요코하마</strong><span class="route"></span></td><td class="num">12/9–12/10</td><td class="detail"></td></tr>
+          <tr data-stay="shibuya"><td><strong>시부야</strong><span class="route"></span></td><td class="num">12/10–12/12</td><td class="detail"></td></tr>
         </tbody>
       </table>
     </div>
@@ -150,18 +150,18 @@
 </section>
 </div>
 <dialog id="place-dialog" class="place-dialog" lang="ko" aria-labelledby="place-title">
-  <div class="place-dialog-head">
-    <h2 id="place-title">지도에서 장소 찾기</h2>
-    <button type="button" id="place-close" aria-label="장소 검색 닫기">닫기</button>
-  </div>
+  <h2 id="place-title" class="vh">지도에서 장소 찾기</h2>
+  <!-- full-screen map; the sheet floats over it: bottom sheet up to 600px, left panel above -->
+  <div id="place-map" class="place-map" role="region" aria-label="장소 검색 지도"></div>
   <form id="place-search" class="place-dialog-search" role="search">
+    <button type="button" id="place-close" aria-label="장소 검색 닫기"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     <input id="place-query" type="search" placeholder="예: 아사쿠사 라멘, 시부야 카페" aria-label="장소 또는 지역 검색" maxlength="200" required>
     <button id="place-run" type="submit">검색</button>
   </form>
-  <p id="place-status" class="place-status" role="status" aria-live="polite">장소를 검색하면 지도와 상세 정보가 나와요.</p>
-  <div class="place-preview">
-    <div class="place-map-wrap"><div id="place-map" class="place-map" role="region" aria-label="장소 검색 지도"></div></div>
-    <div class="place-panel">
+  <section id="place-sheet" class="place-sheet" data-size="peek" aria-label="검색 결과">
+    <button type="button" id="place-handle" class="place-handle" aria-label="목록 크게 보기"><span></span></button>
+    <p id="place-status" class="place-status" role="status" aria-live="polite">장소를 검색하면 지도와 상세 정보가 나와요.</p>
+    <div id="place-panel" class="place-panel">
       <button id="place-back" class="place-back" type="button" hidden>← 검색 결과로</button>
       <div id="place-results" class="place-results" tabindex="-1" aria-label="장소 검색 결과"></div>
       <div id="place-detail-actions" class="place-detail-actions" hidden>
@@ -173,31 +173,34 @@
         <p id="place-menu-status" role="status" aria-live="polite"></p>
         <div id="place-menu-photos"></div>
       </div>
+      <p class="place-note">사진·리뷰·영업시간·가격대는 Google에서 제공하는 범위로 표시돼요. 전체 메뉴와 메뉴별 가격은 제공되지 않을 수 있어요.</p>
     </div>
-  </div>
-  <div class="place-dialog-foot">
-    <a id="place-external" target="_blank" rel="noopener" hidden>Google Maps에서 더 보기 ↗</a>
-    <button id="place-manual" class="place-manual" type="button" hidden>장소 이름 직접 입력</button>
-    <button id="place-choose" type="button" disabled>이 장소 선택</button>
-    <p>사진·리뷰·영업시간·가격대는 Google에서 제공하는 범위로 표시돼요. 전체 메뉴와 메뉴별 가격은 제공되지 않을 수 있어요.</p>
-  </div>
+    <div class="place-dialog-foot">
+      <a id="place-external" target="_blank" rel="noopener" hidden aria-label="Google Maps에서 더 보기">↗</a>
+      <button id="place-manual" class="place-manual" type="button" hidden>장소 이름 직접 입력</button>
+      <button id="place-choose" type="button" disabled>이 장소 선택</button>
+    </div>
+  </section>
 </dialog>
 <script>
 (function () {
   var STAYS = {
-    asakusa:  { name: '아사쿠사', url: 'https://www.airbnb.co.kr/rooms/1252584854885560088', address: '', note: '12/5–12/9 · 4박' },
-    fuji:     { name: '후지시',   url: 'https://www.airbnb.co.kr/rooms/1052017132403984548', address: '', note: '요시와라혼초역 근처 · 셀프 체크인' },
-    yokohama: { name: '요코하마', url: 'https://www.airbnb.co.kr/rooms/1474390371760984472', address: '', note: '12/9–12/10 · 1박' },
-    shibuya:  { name: '시부야',   url: 'https://www.airbnb.co.kr/rooms/1780180127620391752', address: '', note: '12/10–12/12 · 2박' }
+    asakusa:  { name: '아사쿠사', url: 'https://www.airbnb.co.kr/rooms/1252584854885560088', address: '3-chōme-13-14 Senzoku, Taito City, Tokyo 111-0031', note: '12/5–12/9 · 4박' },
+    fuji:     { name: '후지시',   url: 'https://www.airbnb.co.kr/rooms/1052017132403984548', address: '3-32 Minamicho, Fuji, Shizuoka 417-0026', note: '요시와라혼초역 근처 · 셀프 체크인' },
+    yokohama: { name: '요코하마', url: 'https://www.airbnb.co.kr/rooms/1474390371760984472', address: '〒231-0055 가나가와현 요코하마시 나카구 스에요시초 2조메', note: '12/9–12/10 · 1박' },
+    shibuya:  { name: '시부야',   url: 'https://www.airbnb.co.kr/rooms/1780180127620391752', address: '6 Chome-9-9 Honmachi, Shibuya, Tokyo 151-0071', note: '12/10–12/12 · 2박' }
   };
-  function stayLinks(st) {
-    return (st.address
+  // shared by the lodging table and the day view's "오늘 밤" box
+  function routeLink(st) {
+    return st.address
       ? '<a href="' + esc(mapsUrl({ name: st.address })) + '" target="_blank" rel="noopener">길찾기 ↗</a>'
-      : '<button type="button" disabled title="정확한 숙소 주소가 확인되면 연결됩니다.">길찾기 · 주소 확인 중</button>') +
-      '<a href="' + esc(st.url) + '" target="_blank" rel="noopener">숙소 상세 안내 ↗</a>';
+      : '<span title="정확한 숙소 주소가 확인되면 길찾기가 연결됩니다.">주소 확인 중</span>';
   }
-  document.querySelectorAll('[data-stay]').forEach(function (el) {
-    el.innerHTML = stayLinks(STAYS[el.dataset.stay]);
+  function detailLink(st) { return '<a href="' + esc(st.url) + '" target="_blank" rel="noopener">상세 안내 ↗</a>'; }
+  document.querySelectorAll('tr[data-stay]').forEach(function (row) {
+    var st = STAYS[row.dataset.stay];
+    row.querySelector('.route').innerHTML = routeLink(st);
+    row.querySelector('.detail').innerHTML = detailLink(st);
   });
   var DAYS = [
     { d: 5, dow: '토', title: '도착, 아사쿠사', short: '도착 · 아사쿠사', night: 'asakusa', move: ['나리타공항', '아사쿠사'],
@@ -298,7 +301,8 @@
     }
     var st = day.night && STAYS[day.night];
     side += '<div class="box"><div class="box-h">오늘 밤</div><div class="night">' +
-      (st ? '<strong>' + esc(st.name) + '</strong><span>' + esc(st.note) + '</span><div class="stay-links">' + stayLinks(st) + '</div>' : '<strong>귀국, 인천 도착</strong>') +
+      (st ? '<div><strong>' + esc(st.name) + '</strong><span class="route">' + routeLink(st) + '</span></div>' +
+        '<span>' + esc(st.note) + '</span>' + detailLink(st) : '<strong>귀국, 인천 도착</strong>') +
       '</div></div></div>';
     document.getElementById('d-head').innerHTML = head;
     document.getElementById('d-main').innerHTML = html;
@@ -307,6 +311,7 @@
     document.getElementById('prev').addEventListener('click', function () { go(DAYS[idx - 1].d); });
     document.getElementById('next').addEventListener('click', function () { go(DAYS[idx + 1].d); });
     try { document.getElementById('f-by').value = localStorage.getItem('nick') || ''; } catch (e) { /* nickname memory is optional */ }
+    setNowTime(document.getElementById('add-form'));
     picked = null;
     mountPlaceInput();
     renderTimeline();
@@ -346,14 +351,15 @@
     var rows = timelineRows(byDay(current));
     ol.innerHTML = rows.map(function (r, index) {
       if (r.item) {
-        return '<li><span class="t">' + esc(r.item[0]) + '</span><span class="x">' + esc(r.item[1]) +
-          (r.item[2] ? '<span class="pill">' + esc(r.item[2]) + '</span>' : '') +
+        return '<li><span class="t">' + esc(r.item[0]) + '</span><span class="x"><span class="txt">' + esc(r.item[1]) +
+          (r.item[2] ? '<span class="pill">' + esc(r.item[2]) + '</span>' : '') + '</span>' +
           '<span class="reorder">' + [-1, 1].map(function (step) {
             var label = step < 0 ? '위로' : '아래로';
             return '<button type="button" class="move-item" data-id="' + esc(r.id) + '" data-step="' + step +
               '" aria-label="' + esc(r.item[1]) + ' ' + label + '"' +
-              (orderSaving || loadFailed || !placesLoaded || index + step < 0 || index + step >= rows.length ? ' disabled' : '') +
-              '>' + (step < 0 ? '↑' : '↓') + '</button>';
+              (index + step < 0 || index + step >= rows.length ? ' disabled data-edge' : orderSaving || loadFailed || !placesLoaded ? ' disabled' : '') +
+              '><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="' +
+              (step < 0 ? 'M4 10l4-4 4 4' : 'M4 6l4 4 4-4') + '"/></svg></button>';
           }).join('') + '</span></span></li>';
       }
       var p = r.place;
@@ -390,7 +396,7 @@
   });
   document.getElementById('place-back').addEventListener('click', function () {
     resetPreview();
-    searchDialog.scrollTop = 0;
+    document.getElementById('place-panel').scrollTop = 0;
     document.getElementById('place-results').focus({ preventScroll: true });
     document.getElementById('place-status').textContent = '다른 장소의 핀이나 검색 결과를 눌러 비교해 보세요.';
   });
@@ -520,10 +526,53 @@
     if (mapReady) return mapReady;
     mapReady = Promise.all([google.maps.importLibrary('maps'), google.maps.importLibrary('marker'), google.maps.importLibrary('core')]).then(function (libs) {
       mapLibraries = libs;
-      placeMap = new libs[0].Map(document.getElementById('place-map'), { center: { lat: 35.6812, lng: 139.7671 }, zoom: 12, mapId: 'DEMO_MAP_ID', mapTypeControl: false, streetViewControl: false, clickableIcons: false });
+      // greedy: one-finger pan; safe because the map fills the screen and the sheet scrolls on its own
+      placeMap = new libs[0].Map(document.getElementById('place-map'), { center: { lat: 35.6812, lng: 139.7671 }, zoom: 12, mapId: 'DEMO_MAP_ID', gestureHandling: 'greedy', colorScheme: 'FOLLOW_SYSTEM', mapTypeControl: false, streetViewControl: false, fullscreenControl: false, clickableIcons: false });
+      placeMap.addListener('click', function () { setSheet('peek'); });
       return placeMap;
     }).catch(function (err) { mapReady = null; throw err; });
     return mapReady;
+  }
+  // ── sheet: bottom sheet ≤600px (peek / half / full), fixed left panel above ──
+  var sheetSize = 'peek';
+  var SHEET_NEXT = { peek: 'half', half: 'full', full: 'peek' };
+  function isWide() { return !window.matchMedia || window.matchMedia('(min-width: 601px)').matches; }
+  function setSheet(size) {
+    sheetSize = size;
+    document.getElementById('place-sheet').setAttribute('data-size', size);
+    document.getElementById('place-handle').setAttribute('aria-label', size === 'full' ? '목록 작게 보기' : '목록 크게 보기');
+  }
+  document.getElementById('place-handle').addEventListener('click', function () { setSheet(SHEET_NEXT[sheetSize]); });
+  // Map area the sheet leaves uncovered; uses target sizes so it is right while the sheet animates.
+  function mapPadding() {
+    if (isWide()) return { top: 48, right: 48, bottom: 48, left: 12 + 380 + 48 };
+    var h = window.innerHeight || 0;
+    return { top: 88, right: 32, bottom: { peek: 148, half: h / 2, full: h - 80 }[sheetSize] + 24, left: 32 };
+  }
+  function focusOn(location) {
+    var p = mapPadding();
+    placeMap.panTo(location);
+    placeMap.panBy((p.right - p.left) / 2, (p.bottom - p.top) / 2);
+  }
+  // ── my location: centre on the viewer only when they are already in Japan ──
+  var meMarker = null;
+  // ponytail: rough box around Honshu–Kyushu (excludes Korea); Okinawa/Hokkaido edges don't matter for this trip
+  function inJapan(p) { return p.lat > 30 && p.lat < 46 && p.lng > 129.5 && p.lng < 146; }
+  function locateMe(request) {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      if (request !== searchRequest || !searchDialog.open) return;
+      var p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      if (!inJapan(p)) return;
+      if (meMarker) meMarker.position = p;
+      else {
+        var dot = document.createElement('div');
+        dot.className = 'me-dot';
+        meMarker = new mapLibraries[1].AdvancedMarkerElement({ map: placeMap, position: p, title: '내 위치', content: dot });
+      }
+      placeMap.setCenter(p);
+      placeMap.setZoom(15);
+    }, function () { /* denied or unavailable: the Tokyo default centre is the fallback */ }, { timeout: 10000, maximumAge: 300000 });
   }
   async function openPlaceSearch() {
     var request = ++searchRequest;
@@ -532,11 +581,13 @@
     document.getElementById('place-manual').hidden = true;
     document.getElementById('place-query').value = '';
     document.getElementById('place-status').textContent = '지도를 불러오는 중…';
+    setSheet('peek');
     searchDialog.showModal();
     document.getElementById('place-query').focus();
     try {
       await initPlaceMap();
       if (request !== searchRequest || !searchDialog.open) return;
+      locateMe(request);
       document.getElementById('place-status').textContent = '한국어로 검색하면 결과가 지도에 핀으로 표시돼요. 핀이나 목록을 눌러 비교해 보세요.';
     } catch (err) { if (request === searchRequest && searchDialog.open) searchFailed(); }
   }
@@ -587,8 +638,9 @@
       placeMarkers.push({ id: place.id, marker: marker, pin: pin });
       bounds.extend(place.location);
     });
-    if (placeMarkers.length === 1) { placeMap.panTo(placeMarkers[0].marker.position); placeMap.setZoom(16); }
-    else if (placeMarkers.length) placeMap.fitBounds(bounds, 48);
+    if (places.length && sheetSize === 'peek') setSheet('half');
+    if (placeMarkers.length === 1) { placeMap.setZoom(16); focusOn(placeMarkers[0].marker.position); }
+    else if (placeMarkers.length) placeMap.fitBounds(bounds, mapPadding());
     document.getElementById('place-status').textContent = places.length ? places.length + '곳을 찾았어요. 핀이나 목록에서 장소를 골라 보세요.' : '검색 결과가 없어요. 지역명이나 다른 장소 이름으로 다시 검색해 주세요.';
   }
   async function previewPlace(place) {
@@ -599,7 +651,8 @@
     document.getElementById('place-results').hidden = true;
     document.getElementById('place-details').hidden = false;
     document.getElementById('place-back').hidden = false;
-    searchDialog.scrollTop = 0;
+    document.getElementById('place-panel').scrollTop = 0;
+    if (sheetSize === 'peek') setSheet('half');
     document.getElementById('place-back').focus({ preventScroll: true });
     placeMarkers.forEach(function (item) { item.pin.classList.toggle('selected', item.id === place.id); item.marker.zIndex = item.id === place.id ? 100 : 0; });
     status.textContent = '장소와 상세 정보를 불러오는 중…';
@@ -629,7 +682,7 @@
         if (request === previewRequest && searchDialog.open && document.getElementById('place-menu-panel').hidden) status.textContent = '상세 정보 연결이 늦어지고 있어요. 다시 검색하거나 Google Maps에서 이 장소를 확인해 주세요.';
       }, 15000);
       document.getElementById('place-details').replaceChildren(widget);
-      if (place.location && placeMap) placeMap.panTo(place.location);
+      if (place.location && placeMap) focusOn(place.location);
     } catch (err) {
       if (request !== previewRequest || !searchDialog.open) return;
       clearTimeout(detailTimer);
@@ -681,8 +734,7 @@
     fetch('/api/places', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then(function (r) {
         if (!r.ok) return r.json().catch(function () { return {}; }).then(function (d) { throw new Error(d.error || '추가하지 못했어요.'); });
-        form.querySelector('#f-hour').value = '';
-        form.querySelector('#f-minute').value = '';
+        setNowTime(form);
         form.querySelector('#f-memo').value = '';
         picked = null;
         showPicked();
@@ -803,9 +855,26 @@
     var m = /^#d(\d+)$/.exec(location.hash);
     return m && byDay(Number(m[1])) ? Number(m[1]) : null;
   }
+  // Trip runs on Tokyo time (KST is the same UTC+9), regardless of the device's time zone.
+  function tokyoNow() {
+    var p = {};
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date()).forEach(function (x) { p[x.type] = x.value; });
+    return p; // { year, month, day, hour, minute } as zero-padded strings
+  }
+  // before the trip → first day, during → that day, after → last day
   function today() {
-    var n = new Date();
-    return n.getFullYear() === 2026 && n.getMonth() === 11 && byDay(n.getDate()) ? n.getDate() : null;
+    var n = tokyoNow();
+    var ymd = n.year + '-' + n.month + '-' + n.day;
+    var first = DAYS[0].d, last = DAYS[DAYS.length - 1].d;
+    if (ymd < '2026-12-' + String(first).padStart(2, '0')) return first;
+    if (ymd > '2026-12-' + String(last).padStart(2, '0')) return last;
+    return Number(n.day);
+  }
+  function setNowTime(form) {
+    var n = tokyoNow();
+    form.querySelector('#f-hour').value = n.hour;
+    form.querySelector('#f-minute').value = n.minute;
   }
 
   toggle.addEventListener('click', function () { showAll = !showAll; renderMap(byDay(current)); });
@@ -819,7 +888,7 @@
     if (e.key === 'ArrowLeft' && idx > 0) go(DAYS[idx - 1].d);
   });
 
-  current = fromHash() || today() || DAYS[0].d;
+  current = fromHash() || today();
   render();
   load();
 })();

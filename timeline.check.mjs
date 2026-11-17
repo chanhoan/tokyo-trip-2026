@@ -42,12 +42,11 @@ assert.deepEqual(ids(), ['new', 'fixed:9:체크아웃', 'fixed:9:체크인'], 'd
 console.log('timeline reorder ok');
 const stayContext = vm.createContext({ esc: value => String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;') });
 vm.runInContext(html.slice(html.indexOf('  function mapsUrl('), html.indexOf('  function renderTimeline(')), stayContext);
-vm.runInContext(html.slice(html.indexOf('  function stayLinks('), html.indexOf("  document.querySelectorAll('[data-stay]')")), stayContext);
+vm.runInContext(html.slice(html.indexOf('  function routeLink('), html.indexOf("  document.querySelectorAll('tr[data-stay]')")), stayContext);
 const stay = { url: 'https://www.airbnb.co.kr/rooms/123', address: '' };
-assert.match(stayContext.stayLinks(stay), /disabled[^>]*>길찾기 · 주소 확인 중/);
-assert.match(stayContext.stayLinks(stay), /href="https:\/\/www.airbnb.co.kr\/rooms\/123"[^>]*>숙소 상세 안내/);
-const route = stayContext.stayLinks({ ...stay, address: '東京都 台東区 1-2-3' });
+assert.match(stayContext.routeLink(stay), /주소 확인 중/);
+assert.match(stayContext.detailLink(stay), /href="https:\/\/www.airbnb.co.kr\/rooms\/123"[^>]*>상세 안내/);
+const route = stayContext.routeLink({ ...stay, address: '東京都 台東区 1-2-3' });
 assert.ok(route.includes(encodeURIComponent('東京都 台東区 1-2-3')));
-assert.ok(!route.includes('disabled'));
 assert.match(route, /https:\/\/www.google.com\/maps\/dir\//);
 console.log('stay details and directions ok');

@@ -36,15 +36,17 @@ const sdk = {
     PlaceDetailsPlaceRequestElement: class extends Element { constructor(options) { super(); this.place = options.place; } },
     PlaceAllContentElement: Element, AdvancedPlaceDetailsElement: Element, PlaceMediaElement: class extends Element { constructor(options) { super(); Object.assign(this, options); this.searchMediaCount = 0; } } },
   importLibrary: async name => name === 'maps'
-    ? { Map: class { constructor() { this.center = { lat: 35.68, lng: 139.76 }; } getCenter() { return this.center; } panTo() {} setZoom(zoom) { this.zoom = zoom; } fitBounds() {} } }
+    ? { Map: class { constructor(el, options) { this.options = options; this.center = { lat: 35.68, lng: 139.76 }; } getCenter() { return this.center; } setCenter(center) { this.center = center; } panTo() {} panBy() {} addListener(type, listener) { this['on' + type] = listener; } setZoom(zoom) { this.zoom = zoom; } fitBounds() {} } }
     : name === 'marker' ? { AdvancedMarkerElement: class extends Element { constructor(options) { super(); Object.assign(this, options); } } }
     : { LatLngBounds: class { extend() {} } }
 };
+let geoFix = { latitude: 37.56, longitude: 126.97 }; // Seoul: outside Japan
 const context = vm.createContext({
   document: { getElementById: node, createElement: () => new Element(), body: { contains: () => true } },
   google: { maps: sdk }, window: {}, current: 5, console: { error() {} },
   esc: value => String(value).replaceAll('<', '&lt;'),
-  setTimeout, clearTimeout, fetch: async () => ({ ok: true, json: async () => ({}) })
+  setTimeout, clearTimeout, fetch: async () => ({ ok: true, json: async () => ({}) }),
+  navigator: { geolocation: { getCurrentPosition: success => success({ coords: geoFix }) } }
 });
 vm.runInContext(source, context);
 assert.equal(typeof context.previewPlace, 'function', 'rich preview is available');
@@ -54,6 +56,17 @@ const place = name => ({ id: 'ChIJ_' + name, displayName: name, formattedAddress
 await context.openPlaceSearch();
 assert.equal(node('place-dialog').open, true);
 assert.ok(context.placeMap, 'map exists before any search');
+assert.equal(context.placeMap.options.gestureHandling, 'greedy', 'full-screen map pans with one finger');
+assert.deepEqual(context.placeMap.center, { lat: 35.68, lng: 139.76 }, 'viewer outside Japan keeps the Tokyo centre');
+assert.equal(node('place-sheet')['data-size'], 'peek', 'sheet opens low so the map shows');
+node('place-handle').dispatch('click');
+assert.equal(node('place-sheet')['data-size'], 'half', 'handle raises the sheet');
+context.placeMap.onclick();
+assert.equal(node('place-sheet')['data-size'], 'peek', 'tapping the map lowers the sheet');
+node('place-dialog').close();
+geoFix = { latitude: 35.71, longitude: 139.79 }; // Asakusa
+await context.openPlaceSearch();
+assert.deepEqual({ ...context.placeMap.center }, { lat: 35.71, lng: 139.79 }, 'viewer in Japan centres the map on themselves');
 assert.equal(node('place-map').hidden, false, 'map is visible before searching');
 assert.ok(html.includes('<legend>방문 시간 (24시간)</legend>'));
 assert.ok(!html.includes('지도·사진·리뷰로 장소 찾기'), 'short button text');
@@ -198,6 +211,7 @@ let responseOk = true;
 const submitContext = vm.createContext({
   detail: submitTarget, current: 5, picked: null, document: { getElementById: node },
   localStorage: { setItem() {} }, showPicked() {}, mountPlaceInput() {}, load: async () => {}, alert() {},
+  setNowTime(f) { f.querySelector('#f-hour').value = '12'; f.querySelector('#f-minute').value = '34'; },
   fetch: async (_url, options) => { posted = JSON.parse(options.body); return { ok: responseOk, json: async () => ({ error: '저장 실패' }) }; }
 });
 vm.runInContext(submitSource, submitContext);
@@ -209,8 +223,7 @@ for (const [hour, minute] of [['00', '00'], ['09', '05'], ['23', '59']]) {
   submitTarget.dispatch('submit', { target: form, preventDefault() {} });
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(posted.time, hour + ':' + minute, 'POST preserves padded 24-hour time');
-  assert.equal(fields['f-hour'].value, '');
-  assert.equal(fields['f-minute'].value, '');
+  assert.equal(fields['f-hour'].value + ':' + fields['f-minute'].value, '12:34', 'saving resets the time to now');
   assert.equal(fields['f-by'].value, '여행자', 'saving preserves nickname');
 }
 responseOk = false;
