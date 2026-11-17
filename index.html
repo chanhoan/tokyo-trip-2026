@@ -336,11 +336,16 @@
     });
     rows.sort(function (a, b) { return a.k - b.k || a.order - b.order; });
     var saved = timelineOrders[day.d] || [];
+    if (!saved.length) return rows;
+    // Keep the manual order, and slot rows added after it in by time (before the first later row).
     var ranks = new Map(saved.map(function (id, index) { return [id, index]; }));
-    return rows.sort(function (a, b) {
-      return (ranks.has(a.id) ? ranks.get(a.id) : saved.length) -
-        (ranks.has(b.id) ? ranks.get(b.id) : saved.length);
+    var ordered = rows.filter(function (r) { return ranks.has(r.id); })
+      .sort(function (a, b) { return ranks.get(a.id) - ranks.get(b.id); });
+    rows.filter(function (r) { return !ranks.has(r.id); }).forEach(function (r) {
+      var at = ordered.findIndex(function (o) { return o.k > r.k; });
+      ordered.splice(at < 0 ? ordered.length : at, 0, r);
     });
+    return ordered;
   }
   function mapsUrl(p) {
     return 'https://www.google.com/maps/dir/?api=1&travelmode=transit&destination=' + encodeURIComponent(p.name) +
