@@ -47,7 +47,7 @@ let geoCalls = 0;
 const searchBodies = [];
 const searchReplies = []; // queued Text Search replies: JSON body, 'fail', or a pending Promise
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
-const rest = name => ({ id: 'ChIJ_' + name, displayName: { text: name }, formattedAddress: '도쿄', location: { latitude: 35.7, longitude: 139.8 }, rating: 4.4, userRatingCount: 10 });
+const rest = name => ({ id: 'ChIJ_' + name, displayName: { text: name }, formattedAddress: '도쿄', location: { latitude: 35.7, longitude: 139.8 }, rating: 4.4, userRatingCount: 10, photos: [{ name: 'places/ChIJ_' + name + '/photos/p1', authorAttributions: [{ displayName: '작가' }] }] });
 const context = vm.createContext({
   document: { getElementById: node, createElement: () => new Element(), body: { contains: () => true } },
   google: { maps: sdk }, window: {}, current: 5, console: { error() {} },
@@ -113,11 +113,15 @@ assert.equal(searchBodies.at(-1).pageSize, 20, 'Google pages hold at most 20');
 const list = node('place-results').children[0];
 const more = node('place-results').children[1];
 assert.equal(list.children.length, 2, 'results render as a list');
-assert.match(list.children[0].firstChild.children[2].textContent, /★ 4\.4 \(10\) · 도쿄/);
+assert.match(list.children[0].firstChild.children[3].textContent, /★ 4\.4 \(10\) · 도쿄/);
+const thumb = list.children[0].firstChild.children[1].children[0];
+assert.match(thumb.src, /places\/ChIJ_라멘\/photos\/p1\/media\?maxWidthPx=128/, 'list shows the first photo as a thumbnail');
+assert.equal(thumb.loading, 'lazy', 'thumbnails load only when scrolled into view');
+assert.equal(list.children[0].firstChild.children[4].textContent, '사진: 작가', 'photo author is credited');
 assert.equal(context.placeMarkers.length, 2, 'every search result has a pin');
 assert.equal(more.hidden, false, 'more button shows while Google has another page');
 assert.equal(context.candidate, null, 'search results do not select a place automatically');
-searchReplies.push({ places: [rest('셋째')] });
+searchReplies.push({ places: [{ ...rest('셋째'), photos: undefined }] });
 await more.dispatch('click');
 assert.equal(searchBodies.at(-1).pageToken, 'p2', 'next page uses the token');
 assert.equal(searchBodies.at(-1).textQuery, '이치란', 'next page repeats the same query');
@@ -126,6 +130,7 @@ assert.equal(list.children[2].firstChild.children[0].textContent, '3', 'numberin
 assert.equal(context.placeMarkers.length, 3, 'next page adds pins');
 assert.equal(more.hidden, true, 'more button hides on the last page');
 assert.equal(list.children[2].firstChild.focused, true, 'focus moves to the first new result');
+assert.equal(list.children[2].firstChild.children[1].children.length, 0, 'place without photos keeps an empty thumbnail box');
 context.placeMarkers[0].marker.dispatch('gmp-click');
 await tick();
 assert.equal(context.candidate.name, '라멘', 'pin opens place details');

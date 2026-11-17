@@ -710,7 +710,7 @@
     var r = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': mapsKey,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,nextPageToken' },
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.photos,nextPageToken' },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(15000)
     });
@@ -718,8 +718,13 @@
     var data = await r.json();
     if (request !== searchRequest || !searchDialog.open) return;
     var rows = (data.places || []).map(function (p) {
+      var photo = p.photos && p.photos[0];
+      var author = photo && photo.authorAttributions && photo.authorAttributions[0];
       return { id: p.id, name: (p.displayName && p.displayName.text) || '', address: p.formattedAddress || '', rating: p.rating, count: p.userRatingCount,
-        location: p.location ? { lat: p.location.latitude, lng: p.location.longitude } : null };
+        location: p.location ? { lat: p.location.latitude, lng: p.location.longitude } : null,
+        // each thumbnail is one billed Place Photos request (1,000/month free); lazy loading fetches only rows scrolled into view
+        photo: photo ? 'https://places.googleapis.com/v1/' + photo.name + '/media?maxWidthPx=128&key=' + encodeURIComponent(mapsKey) : '',
+        credit: (author && author.displayName) || '' };
     });
     var start = results.length;
     results = results.concat(rows);
@@ -737,7 +742,25 @@
       var meta = document.createElement('span');
       meta.className = 'result-meta';
       meta.textContent = [row.rating ? '★ ' + row.rating.toFixed(1) + (row.count ? ' (' + row.count + ')' : '') : '', row.address].filter(Boolean).join(' · ');
-      button.append(num, name, meta);
+      var thumb = document.createElement('span');
+      thumb.className = 'result-thumb';
+      if (row.photo) {
+        var img = document.createElement('img');
+        img.src = row.photo;
+        img.alt = '';
+        img.loading = 'lazy';
+        img.width = 64;
+        img.height = 64;
+        img.onerror = function () { img.remove(); }; // quota hit (429) or missing photo: keep the empty box, no broken icon
+        thumb.append(img);
+      }
+      button.append(num, thumb, name, meta);
+      if (row.credit) {
+        var credit = document.createElement('span');
+        credit.className = 'result-credit';
+        credit.textContent = '사진: ' + row.credit; // Google requires showing photo author attribution
+        button.append(credit);
+      }
       button.addEventListener('click', function () { if (request === searchRequest && searchDialog.open) return openRow(row); });
       item.append(button);
       resultList.append(item);
