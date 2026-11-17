@@ -57,6 +57,7 @@ const place = name => ({ id: 'ChIJ_' + name, displayName: name, formattedAddress
   location: { lat: 35.7, lng: 139.8 }, fetchFields: async () => {} });
 await context.openPlaceSearch();
 assert.equal(node('place-dialog').open, true);
+assert.ok(!node('place-query').focused, 'opening the map does not focus the search box (no keyboard pop-up)');
 assert.ok(context.placeMap, 'map exists before any search');
 assert.equal(context.placeMap.options.gestureHandling, 'greedy', 'full-screen map pans with one finger');
 assert.deepEqual(context.placeMap.center, { lat: 35.68, lng: 139.76 }, 'viewer outside Japan keeps the Tokyo centre');
