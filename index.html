@@ -544,43 +544,67 @@
     document.getElementById('place-handle').setAttribute('aria-label', size === 'full' ? '목록 작게 보기' : '목록 크게 보기');
   }
   function sheetHeights() { var h = window.innerHeight || 0; return { peek: 148, half: h / 2, full: h - 80 }; }
-  // Drag the handle to resize; on release snap to the nearest size. A plain tap still steps peek → half → full.
-  var handle = document.getElementById('place-handle');
+  // Drag the handle or the status line to resize. On release: a flick or a 24px+ drag moves at least one step
+  // that way, a long drag lands on the nearest size. A plain tap on the handle still steps peek → half → full.
+  var SHEET_ORDER = ['peek', 'half', 'full'];
+  var raf = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : function (f) { f(); };
   var drag = null;
   var dragged = false;
-  handle.addEventListener('click', function () {
+  document.getElementById('place-handle').addEventListener('click', function () {
     if (dragged) { dragged = false; return; }
     setSheet(SHEET_NEXT[sheetSize]);
   });
-  handle.addEventListener('pointerdown', function (e) {
+  function snapTarget(h, dy, velocity) {
+    var sizes = sheetHeights();
+    var nearest = SHEET_ORDER.reduce(function (best, k) { return Math.abs(sizes[k] - h) < Math.abs(sizes[best] - h) ? k : best; }, 'peek');
+    var ni = SHEET_ORDER.indexOf(nearest);
+    var si = SHEET_ORDER.indexOf(drag.size);
+    var dir = Math.abs(velocity) > 0.5 ? Math.sign(velocity) : Math.abs(dy) > 24 ? Math.sign(dy) : 0;
+    if (dir > 0) ni = Math.max(ni, si + 1);
+    if (dir < 0) ni = Math.min(ni, si - 1);
+    return SHEET_ORDER[Math.min(2, Math.max(0, ni))];
+  }
+  function startDrag(e) {
     if (isWide()) return;
     var sheet = document.getElementById('place-sheet');
-    drag = { y: e.clientY, h: sheet.offsetHeight, moved: false };
-    handle.setPointerCapture(e.pointerId);
+    drag = { y: e.clientY, lastY: e.clientY, lastT: Date.now(), v: 0, h: sheet.offsetHeight, size: sheetSize, moved: false, pending: false, next: 0 };
+    e.currentTarget.setPointerCapture(e.pointerId);
     sheet.style.transition = 'none';
-  });
-  handle.addEventListener('pointermove', function (e) {
+  }
+  function moveDrag(e) {
     if (!drag) return;
+    var now = Date.now();
+    drag.v = (drag.lastY - e.clientY) / Math.max(1, now - drag.lastT); // px/ms, positive = up
+    drag.lastY = e.clientY;
+    drag.lastT = now;
     var dy = drag.y - e.clientY;
     if (Math.abs(dy) > 6) drag.moved = true;
-    var max = sheetHeights().full;
-    document.getElementById('place-sheet').style.height = Math.min(max, Math.max(120, drag.h + dy)) + 'px';
-  });
+    drag.next = Math.min(sheetHeights().full, Math.max(120, drag.h + dy));
+    if (drag.pending) return;
+    drag.pending = true;
+    raf(function () {
+      if (!drag) return;
+      drag.pending = false;
+      document.getElementById('place-sheet').style.height = drag.next + 'px';
+    });
+  }
   function endDrag() {
     if (!drag) return;
     var sheet = document.getElementById('place-sheet');
     var h = sheet.offsetHeight;
-    var sizes = sheetHeights();
+    var target = drag.moved ? snapTarget(h, drag.y - drag.lastY, drag.v) : null;
     sheet.style.height = '';
     sheet.style.transition = '';
-    if (drag.moved) {
-      dragged = true;
-      setSheet(Object.keys(sizes).reduce(function (best, k) { return Math.abs(sizes[k] - h) < Math.abs(sizes[best] - h) ? k : best; }, 'peek'));
-    }
+    if (target) { dragged = true; setSheet(target); }
     drag = null;
   }
-  handle.addEventListener('pointerup', endDrag);
-  handle.addEventListener('pointercancel', endDrag);
+  ['place-handle', 'place-status'].forEach(function (id) {
+    var zone = document.getElementById(id);
+    zone.addEventListener('pointerdown', startDrag);
+    zone.addEventListener('pointermove', moveDrag);
+    zone.addEventListener('pointerup', endDrag);
+    zone.addEventListener('pointercancel', endDrag);
+  });
   // Map area the sheet leaves uncovered; uses target sizes so it is right while the sheet animates.
   function mapPadding() {
     if (isWide()) return { top: 48, right: 48, bottom: 48, left: 12 + 380 + 48 };
