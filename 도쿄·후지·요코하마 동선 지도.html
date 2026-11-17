@@ -440,7 +440,8 @@
     var box = document.getElementById('f-picked');
     if (!box) return;
     box.hidden = !picked;
-    box.innerHTML = picked ? '<b>' + esc(picked.name) + '</b>' + (picked.address ? '<span>' + esc(picked.address) + '</span>' : '') : '';
+    box.innerHTML = picked ? '<b>' + esc(picked.name) + '</b>' + (picked.address ? '<span>' + esc(picked.address) + '</span>' : '') +
+      '<button type="button" class="picked-clear" aria-label="선택한 장소 지우기">✕</button>' : '';
   }
   function mountPlaceInput() {
     var slot = document.getElementById('f-place');
@@ -542,38 +543,83 @@
     document.getElementById('place-sheet').setAttribute('data-size', size);
     document.getElementById('place-handle').setAttribute('aria-label', size === 'full' ? '목록 작게 보기' : '목록 크게 보기');
   }
-  document.getElementById('place-handle').addEventListener('click', function () { setSheet(SHEET_NEXT[sheetSize]); });
+  function sheetHeights() { var h = window.innerHeight || 0; return { peek: 148, half: h / 2, full: h - 80 }; }
+  // Drag the handle to resize; on release snap to the nearest size. A plain tap still steps peek → half → full.
+  var handle = document.getElementById('place-handle');
+  var drag = null;
+  var dragged = false;
+  handle.addEventListener('click', function () {
+    if (dragged) { dragged = false; return; }
+    setSheet(SHEET_NEXT[sheetSize]);
+  });
+  handle.addEventListener('pointerdown', function (e) {
+    if (isWide()) return;
+    var sheet = document.getElementById('place-sheet');
+    drag = { y: e.clientY, h: sheet.offsetHeight, moved: false };
+    handle.setPointerCapture(e.pointerId);
+    sheet.style.transition = 'none';
+  });
+  handle.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    var dy = drag.y - e.clientY;
+    if (Math.abs(dy) > 6) drag.moved = true;
+    var max = sheetHeights().full;
+    document.getElementById('place-sheet').style.height = Math.min(max, Math.max(120, drag.h + dy)) + 'px';
+  });
+  function endDrag() {
+    if (!drag) return;
+    var sheet = document.getElementById('place-sheet');
+    var h = sheet.offsetHeight;
+    var sizes = sheetHeights();
+    sheet.style.height = '';
+    sheet.style.transition = '';
+    if (drag.moved) {
+      dragged = true;
+      setSheet(Object.keys(sizes).reduce(function (best, k) { return Math.abs(sizes[k] - h) < Math.abs(sizes[best] - h) ? k : best; }, 'peek'));
+    }
+    drag = null;
+  }
+  handle.addEventListener('pointerup', endDrag);
+  handle.addEventListener('pointercancel', endDrag);
   // Map area the sheet leaves uncovered; uses target sizes so it is right while the sheet animates.
   function mapPadding() {
     if (isWide()) return { top: 48, right: 48, bottom: 48, left: 12 + 380 + 48 };
-    var h = window.innerHeight || 0;
-    return { top: 88, right: 32, bottom: { peek: 148, half: h / 2, full: h - 80 }[sheetSize] + 24, left: 32 };
+    return { top: 88, right: 32, bottom: sheetHeights()[sheetSize] + 24, left: 32 };
   }
   function focusOn(location) {
     var p = mapPadding();
     placeMap.panTo(location);
     placeMap.panBy((p.right - p.left) / 2, (p.bottom - p.top) / 2);
   }
-  // ── my location: centre on the viewer only when they are already in Japan ──
+  // ── my location: asked on page load, used to centre the search map (only when the viewer is in Japan) ──
+  var myPos = null;
   var meMarker = null;
   // ponytail: rough box around Honshu–Kyushu (excludes Korea); Okinawa/Hokkaido edges don't matter for this trip
   function inJapan(p) { return p.lat > 30 && p.lat < 46 && p.lng > 129.5 && p.lng < 146; }
-  function locateMe(request) {
+  function requestMyPos(onFix) {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(function (pos) {
-      if (request !== searchRequest || !searchDialog.open) return;
-      var p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      if (!inJapan(p)) return;
-      if (meMarker) meMarker.position = p;
-      else {
-        var dot = document.createElement('div');
-        dot.className = 'me-dot';
-        meMarker = new mapLibraries[1].AdvancedMarkerElement({ map: placeMap, position: p, title: '내 위치', content: dot });
-      }
-      placeMap.setCenter(p);
-      placeMap.setZoom(15);
+      myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      if (onFix) onFix();
     }, function () { /* denied or unavailable: the Tokyo default centre is the fallback */ }, { timeout: 10000, maximumAge: 300000 });
   }
+  function centerOnMe(request) {
+    if (!myPos || !inJapan(myPos) || request !== searchRequest || !searchDialog.open) return;
+    if (meMarker) meMarker.position = myPos;
+    else {
+      var dot = document.createElement('div');
+      dot.className = 'me-dot';
+      meMarker = new mapLibraries[1].AdvancedMarkerElement({ map: placeMap, position: myPos, title: '내 위치', content: dot });
+    }
+    placeMap.setCenter(myPos);
+    placeMap.setZoom(15);
+  }
+  // Uses the fix taken on page load right away, then refreshes it (no prompt once permission is granted).
+  function locateMe(request) {
+    centerOnMe(request);
+    requestMyPos(function () { centerOnMe(request); });
+  }
+  requestMyPos();
   async function openPlaceSearch() {
     var request = ++searchRequest;
     resetPreview();
@@ -746,6 +792,7 @@
       .then(function () { btn.disabled = false; });
   });
   detail.addEventListener('click', function (e) {
+    if (e.target.closest('.picked-clear')) { picked = null; showPicked(); return; }
     var move = e.target.closest('.move-item');
     if (move) { moveFixedItem(move); return; }
     var del = e.target.closest('.del');

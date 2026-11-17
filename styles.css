@@ -176,7 +176,9 @@ svg.map { display: block; width: 100%; height: 320px; }
 .add-form input, .add-form select { font: inherit; font-size: 14px; min-width: 0; width: 100%; }
 .add-form input, .add-form select { padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); color: var(--ink); }
 .add-form .full, .add-form .picked { grid-column: 1 / -1; }
-.picked { display: grid; font-size: 13px; background: var(--soft); border-radius: 8px; padding: 6px 10px; }
+.picked { position: relative; display: grid; font-size: 13px; background: var(--soft); border-radius: 8px; padding: 6px 48px 6px 10px; }
+.picked-clear { position: absolute; top: 50%; right: 2px; transform: translateY(-50%); width: 44px; height: 44px; border: 0; background: none; color: var(--muted); font-size: 16px; cursor: pointer; }
+.picked-clear:hover { color: var(--ink); }
 .picked span { color: var(--muted); font-size: 12px; }
 .add-form button[type="submit"] { grid-column: 1 / -1; padding: 9px; border: 0; border-radius: 8px; background: var(--c); color: #fff; font-weight: 700; cursor: pointer; }
 .add-form button:disabled { opacity: .5; cursor: default; }
@@ -196,7 +198,7 @@ body:has(.place-dialog[open]) { overflow: hidden; }
 .place-sheet { --sheet-h: 148px; position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; height: var(--sheet-h); display: flex; flex-direction: column; background: var(--card); border-radius: 18px 18px 0 0; box-shadow: 0 -4px 18px rgb(0 0 0 / .16); transition: height .25s ease; }
 .place-sheet[data-size="half"] { --sheet-h: 50dvh; }
 .place-sheet[data-size="full"] { --sheet-h: calc(100dvh - 80px); }
-.place-handle { flex-shrink: 0; height: 28px; border: 0; background: none; display: grid; place-items: center; cursor: pointer; }
+.place-handle { flex-shrink: 0; height: 36px; border: 0; background: none; display: grid; place-items: center; cursor: grab; touch-action: none; }
 .place-handle span { width: 40px; height: 5px; border-radius: 3px; background: var(--rule); }
 .place-status { margin: 0; padding: 0 18px 10px; font-size: 14px; color: var(--muted); }
 .place-panel { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px 16px; }

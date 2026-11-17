@@ -41,14 +41,16 @@ const sdk = {
     : { LatLngBounds: class { extend() {} } }
 };
 let geoFix = { latitude: 37.56, longitude: 126.97 }; // Seoul: outside Japan
+let geoCalls = 0;
 const context = vm.createContext({
   document: { getElementById: node, createElement: () => new Element(), body: { contains: () => true } },
   google: { maps: sdk }, window: {}, current: 5, console: { error() {} },
   esc: value => String(value).replaceAll('<', '&lt;'),
   setTimeout, clearTimeout, fetch: async () => ({ ok: true, json: async () => ({}) }),
-  navigator: { geolocation: { getCurrentPosition: success => success({ coords: geoFix }) } }
+  navigator: { geolocation: { getCurrentPosition: success => { geoCalls++; success({ coords: geoFix }); } } }
 });
 vm.runInContext(source, context);
+assert.equal(geoCalls, 1, 'location is requested on page load, before the search opens');
 assert.equal(typeof context.previewPlace, 'function', 'rich preview is available');
 
 const place = name => ({ id: 'ChIJ_' + name, displayName: name, formattedAddress: '도쿄',
@@ -63,6 +65,17 @@ node('place-handle').dispatch('click');
 assert.equal(node('place-sheet')['data-size'], 'half', 'handle raises the sheet');
 context.placeMap.onclick();
 assert.equal(node('place-sheet')['data-size'], 'peek', 'tapping the map lowers the sheet');
+Object.assign(context.window, { innerHeight: 844, matchMedia: () => ({ matches: false }) });
+node('place-handle').setPointerCapture = () => {};
+node('place-sheet').offsetHeight = 148;
+node('place-handle').dispatch('pointerdown', { clientY: 700, pointerId: 1 });
+node('place-handle').dispatch('pointermove', { clientY: 150 });
+assert.equal(node('place-sheet').style.height, '698px', 'sheet follows the finger');
+node('place-sheet').offsetHeight = 698;
+node('place-handle').dispatch('pointerup', {});
+node('place-handle').dispatch('click');
+assert.equal(node('place-sheet')['data-size'], 'full', 'release snaps to the nearest size; the trailing click is ignored');
+delete context.window.matchMedia;
 node('place-dialog').close();
 geoFix = { latitude: 35.71, longitude: 139.79 }; // Asakusa
 await context.openPlaceSearch();
@@ -233,4 +246,15 @@ submitTarget.dispatch('submit', { target: form, preventDefault() {} });
 await new Promise(resolve => setTimeout(resolve, 0));
 assert.equal(fields['f-hour'].value, '09', 'failed save preserves hour');
 assert.equal(fields['f-minute'].value, '05', 'failed save preserves minute');
+context.picked = { name: '센소지', placeId: 'x', address: '' };
+context.showPicked();
+assert.match(node('f-picked').innerHTML, /picked-clear/, 'picked place has a clear button');
+const clickSource = html.slice(html.indexOf("  detail.addEventListener('click'"), html.indexOf('  async function moveFixedItem('));
+const clickTarget = new Element();
+let cleared = false;
+const clickContext = vm.createContext({ detail: clickTarget, picked: { name: '센소지' }, showPicked() { cleared = true; }, confirm: () => false });
+vm.runInContext(clickSource, clickContext);
+clickTarget.dispatch('click', { target: { closest: selector => selector === '.picked-clear' ? {} : null } });
+assert.equal(clickContext.picked, null, 'clear button drops the picked place before saving');
+assert.ok(cleared, 'form re-renders without the picked place');
 console.log('place preview: selection, cancel, races, failure and local sync OK');
