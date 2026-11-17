@@ -150,7 +150,8 @@
 </section>
 </div>
 <dialog id="place-dialog" class="place-dialog" lang="ko" aria-labelledby="place-title">
-  <h2 id="place-title" class="vh">지도에서 장소 찾기</h2>
+  <!-- autofocus target: showModal() would otherwise focus the first button and draw the focus ring -->
+  <h2 id="place-title" class="vh" tabindex="-1" autofocus>지도에서 장소 찾기</h2>
   <!-- full-screen map; the sheet floats over it: bottom sheet up to 600px, left panel above -->
   <div id="place-map" class="place-map" role="region" aria-label="장소 검색 지도"></div>
   <form id="place-search" class="place-dialog-search" role="search">
