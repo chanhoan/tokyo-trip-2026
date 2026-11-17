@@ -393,6 +393,11 @@
   var menuTimer = null;
   var menuRequest = 0;
   var menuPlaceId = null;
+  var mapsKey = '';
+  var results = [];       // rows from Text Search, numbered like their pins
+  var nextPage = null;    // request body for the next 20 results, null when Google has no more
+  var resultList = null;
+  var moreButton = null;
   searchDialog.addEventListener('close', function () {
     searchRequest++;
     clearTimeout(searchTimer);
@@ -427,6 +432,7 @@
     if (mapsReady) return mapsReady;
     mapsReady = fetch('/api/config').then(function (r) { return r.ok ? r.json() : {}; }).then(function (cfg) {
       if (!cfg.mapsKey) return false;
+      mapsKey = cfg.mapsKey;
       return new Promise(function (resolve) {
         var timer = setTimeout(function () { resolve(false); }, 15000);
         window.__mapsLoaded = function () { clearTimeout(timer); resolve(true); };
@@ -452,7 +458,7 @@
     var slot = document.getElementById('f-place');
     slot.innerHTML = '<input id="f-name" placeholder="장소 이름" maxlength="80" aria-label="장소 이름">';
     loadMaps().then(function (ok) {
-      if (!ok || !document.body.contains(slot) || !google.maps.places.PlaceSearchElement) return;
+      if (!ok || !document.body.contains(slot) || !google.maps.places.Place) return;
       var button = document.createElement('button');
       button.type = 'button';
       button.className = 'place-open';
@@ -680,22 +686,86 @@
     document.getElementById('place-results').replaceChildren();
     document.getElementById('place-manual').hidden = true;
     document.getElementById('place-status').textContent = '검색 결과를 불러오는 중…';
+    results = [];
+    nextPage = null;
     try {
       await initPlaceMap();
       if (request !== searchRequest || !searchDialog.open) return;
-      var widget = new google.maps.places.PlaceSearchElement({ selectable: true });
-      widget.append(new google.maps.places.PlaceTextSearchRequestElement({ textQuery: query, locationBias: placeMap.getCenter(), maxResultCount: 20 }), new google.maps.places.PlaceAllContentElement());
-      widget.addEventListener('gmp-select', function (e) { if (request === searchRequest && searchDialog.open) return previewPlace(e.place); });
-      widget.addEventListener('gmp-load', function () {
-        if (request !== searchRequest || !searchDialog.open) return;
-        clearTimeout(searchTimer);
-        showResultPins(widget.places || []);
-      });
-      widget.addEventListener('gmp-error', function () { if (request === searchRequest && searchDialog.open) searchFailed(); });
-      searchTimer = setTimeout(function () { if (request === searchRequest && searchDialog.open) searchFailed(); }, 15000);
-      document.getElementById('place-results').replaceChildren(widget);
+      resultList = document.createElement('ol');
+      resultList.className = 'result-list';
+      moreButton = document.createElement('button');
+      moreButton.type = 'button';
+      moreButton.className = 'result-more';
+      moreButton.hidden = true;
+      moreButton.addEventListener('click', loadMore);
+      document.getElementById('place-results').replaceChildren(resultList, moreButton);
+      var c = placeMap.getCenter();
+      c = c.toJSON ? c.toJSON() : c;
+      await loadPage(request, { textQuery: query, languageCode: 'ko', regionCode: 'JP', pageSize: 20,
+        locationBias: { circle: { center: { latitude: c.lat, longitude: c.lng }, radius: 5000 } } });
     } catch (err) { if (request === searchRequest && searchDialog.open) { console.error('place search failed', err); searchFailed(); } }
   }
+  // Text Search (New) over REST: the UI-kit list stops at 20, this pages on with nextPageToken (Google caps a query at ~60).
+  async function loadPage(request, body) {
+    var r = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': mapsKey,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,nextPageToken' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!r.ok) throw new Error('Text Search HTTP ' + r.status);
+    var data = await r.json();
+    if (request !== searchRequest || !searchDialog.open) return;
+    var rows = (data.places || []).map(function (p) {
+      return { id: p.id, name: (p.displayName && p.displayName.text) || '', address: p.formattedAddress || '', rating: p.rating, count: p.userRatingCount,
+        location: p.location ? { lat: p.location.latitude, lng: p.location.longitude } : null };
+    });
+    var start = results.length;
+    results = results.concat(rows);
+    nextPage = data.nextPageToken ? Object.assign({}, body, { pageToken: data.nextPageToken }) : null;
+    rows.forEach(function (row, i) {
+      var item = document.createElement('li');
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'result-item';
+      var num = document.createElement('span');
+      num.className = 'result-num';
+      num.textContent = String(start + i + 1);
+      var name = document.createElement('b');
+      name.textContent = row.name;
+      var meta = document.createElement('span');
+      meta.className = 'result-meta';
+      meta.textContent = [row.rating ? '★ ' + row.rating.toFixed(1) + (row.count ? ' (' + row.count + ')' : '') : '', row.address].filter(Boolean).join(' · ');
+      button.append(num, name, meta);
+      button.addEventListener('click', function () { if (request === searchRequest && searchDialog.open) return openRow(row); });
+      item.append(button);
+      resultList.append(item);
+    });
+    moreButton.disabled = false;
+    moreButton.textContent = '결과 더 보기';
+    moreButton.hidden = !nextPage;
+    showResultPins(results);
+    return rows;
+  }
+  async function loadMore() {
+    if (!nextPage) return;
+    var request = searchRequest;
+    var first = resultList.children.length;
+    moreButton.disabled = true;
+    moreButton.textContent = '불러오는 중…';
+    try {
+      var rows = await loadPage(request, nextPage);
+      if (rows && rows.length) resultList.children[first].firstChild.focus({ preventScroll: true }); // keep keyboard place when the button hides
+    } catch (err) {
+      if (request !== searchRequest || !searchDialog.open) return;
+      console.error('more results failed', err);
+      moreButton.disabled = false;
+      moreButton.textContent = '다시 시도';
+      document.getElementById('place-status').textContent = '결과를 더 불러오지 못했어요. 다시 시도해 주세요.';
+    }
+  }
+  function openRow(row) { return previewPlace(new google.maps.places.Place({ id: row.id })); }
   function showResultPins(places) {
     clearPlaceMarkers();
     var request = searchRequest;
@@ -708,14 +778,14 @@
       number.textContent = String(index + 1);
       pin.append(number);
       var marker = new mapLibraries[1].AdvancedMarkerElement({ map: placeMap, position: place.location, title: '검색 결과 ' + (index + 1), gmpClickable: true, content: pin });
-      marker.addEventListener('gmp-click', function () { if (request === searchRequest && searchDialog.open) previewPlace(place); });
+      marker.addEventListener('gmp-click', function () { if (request === searchRequest && searchDialog.open) openRow(place); });
       placeMarkers.push({ id: place.id, marker: marker, pin: pin });
       bounds.extend(place.location);
     });
     if (places.length && sheetSize === 'peek') setSheet('half');
     if (placeMarkers.length === 1) { placeMap.setZoom(16); focusOn(placeMarkers[0].marker.position); }
     else if (placeMarkers.length) placeMap.fitBounds(bounds, mapPadding());
-    document.getElementById('place-status').textContent = places.length ? places.length + '곳을 찾았어요. 핀이나 목록에서 장소를 골라 보세요.' : '검색 결과가 없어요. 지역명이나 다른 장소 이름으로 다시 검색해 주세요.';
+    document.getElementById('place-status').textContent = places.length ? places.length + '곳을 찾았어요. 핀이나 목록에서 장소를 골라 보세요.' + (nextPage ? ' 목록 끝에서 더 볼 수 있어요.' : '') : '검색 결과가 없어요. 지역명이나 다른 장소 이름으로 다시 검색해 주세요.';
   }
   async function previewPlace(place) {
     resetPreview();

@@ -28,11 +28,13 @@ class Element {
   close() { this.open = false; this.listeners.close?.(); }
   focus() { this.focused = true; }
   dispatch(type, event = {}) { return this.listeners[type]?.(event); }
+  get firstChild() { return this.children[0]; }
 }
 const nodes = new Map();
 const node = id => { if (!nodes.has(id)) nodes.set(id, new Element()); return nodes.get(id); };
 const sdk = {
-  places: { PlaceSearchElement: Element, PlaceTextSearchRequestElement: class extends Element { constructor(options) { super(options); Object.assign(this, options); } }, PlaceDetailsElement: Element,
+  places: { PlaceDetailsElement: Element,
+    Place: class { constructor({ id }) { this.id = id; } async fetchFields() { this.displayName = this.id.replace('ChIJ_', ''); this.formattedAddress = '도쿄'; this.location = { lat: 35.7, lng: 139.8 }; } },
     PlaceDetailsPlaceRequestElement: class extends Element { constructor(options) { super(); this.place = options.place; } },
     PlaceAllContentElement: Element, AdvancedPlaceDetailsElement: Element, PlaceMediaElement: class extends Element { constructor(options) { super(); Object.assign(this, options); this.searchMediaCount = 0; } } },
   importLibrary: async name => name === 'maps'
@@ -42,11 +44,21 @@ const sdk = {
 };
 let geoFix = { latitude: 37.56, longitude: 126.97 }; // Seoul: outside Japan
 let geoCalls = 0;
+const searchBodies = [];
+const searchReplies = []; // queued Text Search replies: JSON body, 'fail', or a pending Promise
+const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+const rest = name => ({ id: 'ChIJ_' + name, displayName: { text: name }, formattedAddress: '도쿄', location: { latitude: 35.7, longitude: 139.8 }, rating: 4.4, userRatingCount: 10 });
 const context = vm.createContext({
   document: { getElementById: node, createElement: () => new Element(), body: { contains: () => true } },
   google: { maps: sdk }, window: {}, current: 5, console: { error() {} },
   esc: value => String(value).replaceAll('<', '&lt;'),
-  setTimeout, clearTimeout, fetch: async () => ({ ok: true, json: async () => ({}) }),
+  setTimeout, clearTimeout, AbortSignal,
+  fetch: async (url, options) => {
+    if (!String(url).includes('searchText')) return { ok: true, json: async () => ({}) };
+    searchBodies.push(JSON.parse(options.body));
+    const reply = await searchReplies.shift();
+    return reply === 'fail' ? { ok: false, status: 403 } : { ok: true, json: async () => reply ?? { places: [] } };
+  },
   navigator: { geolocation: { getCurrentPosition: success => { geoCalls++; success({ coords: geoFix }); } } }
 });
 vm.runInContext(source, context);
@@ -94,22 +106,33 @@ assert.equal(node('place-map').hidden, false, 'map is visible before searching')
 assert.ok(html.includes('<legend>방문 시간 (24시간)</legend>'));
 assert.ok(!html.includes('지도·사진·리뷰로 장소 찾기'), 'short button text');
 node('place-query').value = '  이치란  ';
+searchReplies.push({ places: [rest('라멘'), rest('다른 가게')], nextPageToken: 'p2' });
 await context.searchPlaces();
-const search = node('place-results').children[0];
-assert.equal(search.children[0].textQuery, '이치란');
-const first = place('라멘');
-const second = place('다른 가게');
-search.places = [first, second];
-await search.dispatch('gmp-load');
+assert.equal(searchBodies.at(-1).textQuery, '이치란');
+assert.equal(searchBodies.at(-1).pageSize, 20, 'Google pages hold at most 20');
+const list = node('place-results').children[0];
+const more = node('place-results').children[1];
+assert.equal(list.children.length, 2, 'results render as a list');
+assert.match(list.children[0].firstChild.children[2].textContent, /★ 4\.4 \(10\) · 도쿄/);
 assert.equal(context.placeMarkers.length, 2, 'every search result has a pin');
+assert.equal(more.hidden, false, 'more button shows while Google has another page');
 assert.equal(context.candidate, null, 'search results do not select a place automatically');
+searchReplies.push({ places: [rest('셋째')] });
+await more.dispatch('click');
+assert.equal(searchBodies.at(-1).pageToken, 'p2', 'next page uses the token');
+assert.equal(searchBodies.at(-1).textQuery, '이치란', 'next page repeats the same query');
+assert.equal(list.children.length, 3, 'next page appends to the list');
+assert.equal(list.children[2].firstChild.children[0].textContent, '3', 'numbering continues across pages');
+assert.equal(context.placeMarkers.length, 3, 'next page adds pins');
+assert.equal(more.hidden, true, 'more button hides on the last page');
+assert.equal(list.children[2].firstChild.focused, true, 'focus moves to the first new result');
 context.placeMarkers[0].marker.dispatch('gmp-click');
-await new Promise(resolve => setTimeout(resolve, 0));
+await tick();
 assert.equal(context.candidate.name, '라멘', 'pin opens place details');
 assert.equal(node('place-back').focused, true, 'selection moves focus into the detail view');
-await search.dispatch('gmp-select', { place: second });
-assert.equal(context.candidate.name, '다른 가게', 'result card opens place details');
-assert.equal(context.placeMarkers.length, 2, 'browsing keeps all result pins');
+await list.children[1].firstChild.dispatch('click');
+assert.equal(context.candidate.name, '다른 가게', 'result row opens place details');
+assert.equal(context.placeMarkers.length, 3, 'browsing keeps all result pins');
 node('place-back').dispatch('click');
 assert.equal(node('place-results').hidden, false, 'back restores existing result list');
 assert.equal(context.candidate, null, 'back clears unconfirmed candidate');
@@ -160,27 +183,36 @@ assert.equal(node('place-menu-photos').children.length, 0, 'closed preview clear
 
 await context.openPlaceSearch();
 node('place-query').value = '첫 검색';
+searchReplies.push({ places: [rest('라멘')], nextPageToken: 'x' });
 await context.searchPlaces();
-const oldResults = node('place-results').children[0];
-oldResults.places = [first];
-await oldResults.dispatch('gmp-load');
 assert.equal(context.placeMap.zoom, 16, 'one result stays at a useful street zoom');
 const oldPin = context.placeMarkers[0].marker;
+const oldMore = node('place-results').children[1];
+searchReplies.push('fail');
+await oldMore.dispatch('click');
+assert.equal(oldMore.textContent, '다시 시도', 'failed page offers retry');
+assert.equal(oldMore.disabled, false);
+assert.match(node('place-status').textContent, /더 불러오지/);
+assert.equal(node('place-results').children[0].children.length, 1, 'failed page keeps loaded results');
+let releaseOld;
+searchReplies.push(new Promise(resolve => { releaseOld = resolve; }));
+node('place-query').value = '느린 검색';
+const slowSearch = context.searchPlaces();
+await tick();
 node('place-query').value = '새 검색';
+searchReplies.push({ places: [] });
 await context.searchPlaces();
 assert.equal(context.candidate, null, 'new search clears candidate');
 assert.equal(node('place-detail-actions').hidden, true, 'new search hides old place photo actions');
 oldPin.dispatch('gmp-click');
-await new Promise(resolve => setTimeout(resolve, 0));
+await tick();
 assert.equal(context.candidate, null, 'stale pin events cannot select previous search results');
-oldResults.places = [first];
-await oldResults.dispatch('gmp-load');
+releaseOld({ places: [rest('라멘')] });
+await slowSearch;
 assert.equal(context.placeMarkers.length, 0, 'stale search results cannot add pins');
-const newResults = node('place-results').children[0];
-newResults.places = [];
-await newResults.dispatch('gmp-load');
 assert.match(node('place-status').textContent, /없어요/);
-newResults.dispatch('gmp-error');
+searchReplies.push('fail');
+await context.searchPlaces();
 assert.equal(node('place-map').hidden, false, 'search errors leave map visible');
 assert.equal(node('place-manual').hidden, false, 'denied search offers manual entry');
 node('place-dialog').close();
@@ -218,8 +250,8 @@ node('place-dialog').close();
 assert.equal(await context.loadMaps(), false, 'missing API key keeps manual input available');
 await context.openPlaceSearch();
 node('place-query').value = '오류';
+searchReplies.push('fail');
 await context.searchPlaces();
-node('place-results').children[0].dispatch('gmp-error');
 assert.equal(node('place-manual').hidden, false, 'denied search offers manual entry');
 node('place-manual').dispatch('click');
 assert.match(node('f-place').innerHTML, /id="f-name"/);
