@@ -195,12 +195,12 @@ body:has(.place-dialog[open]) { overflow: hidden; }
 .place-dialog-search button:disabled { opacity: .5; cursor: default; }
 #place-close { width: 44px; display: grid; place-items: center; background: var(--soft); color: var(--ink); }
 #place-run { padding: 0 16px; white-space: nowrap; background: var(--ink); color: var(--card); }
-.place-sheet { --sheet-h: 148px; position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; height: var(--sheet-h); display: flex; flex-direction: column; background: var(--card); border-radius: 18px 18px 0 0; box-shadow: 0 -4px 18px rgb(0 0 0 / .16); transition: height .25s ease; }
+.place-sheet { --sheet-h: 148px; position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; height: var(--sheet-h); display: flex; flex-direction: column; background: var(--card); border-radius: 18px 18px 0 0; box-shadow: 0 -4px 18px rgb(0 0 0 / .16); transition: height .32s cubic-bezier(.2, .8, .2, 1); }
 .place-sheet[data-size="half"] { --sheet-h: 50dvh; }
 .place-sheet[data-size="full"] { --sheet-h: calc(100dvh - 80px); }
 .place-handle { flex-shrink: 0; height: 36px; border: 0; background: none; display: grid; place-items: center; cursor: grab; touch-action: none; }
 .place-handle span { width: 40px; height: 5px; border-radius: 3px; background: var(--rule); }
-.place-status { margin: 0; padding: 0 18px 10px; font-size: 14px; color: var(--muted); }
+.place-status { margin: 0; padding: 0 18px 10px; font-size: 14px; color: var(--muted); touch-action: none; user-select: none; }
 .place-panel { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px 16px; }
 .place-back { min-height: 44px; padding: 0 14px; font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--rule); border-radius: 999px; cursor: pointer; }
 .place-note { margin: 16px 0 0; font-size: 12px; color: var(--muted); }

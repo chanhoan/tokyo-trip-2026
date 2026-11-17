@@ -68,13 +68,21 @@ assert.equal(node('place-sheet')['data-size'], 'peek', 'tapping the map lowers t
 Object.assign(context.window, { innerHeight: 844, matchMedia: () => ({ matches: false }) });
 node('place-handle').setPointerCapture = () => {};
 node('place-sheet').offsetHeight = 148;
-node('place-handle').dispatch('pointerdown', { clientY: 700, pointerId: 1 });
+node('place-handle').dispatch('pointerdown', { clientY: 700, pointerId: 1, currentTarget: node('place-handle') });
 node('place-handle').dispatch('pointermove', { clientY: 150 });
 assert.equal(node('place-sheet').style.height, '698px', 'sheet follows the finger');
 node('place-sheet').offsetHeight = 698;
 node('place-handle').dispatch('pointerup', {});
 node('place-handle').dispatch('click');
 assert.equal(node('place-sheet')['data-size'], 'full', 'release snaps to the nearest size; the trailing click is ignored');
+context.placeMap.onclick();
+node('place-status').setPointerCapture = () => {};
+node('place-sheet').offsetHeight = 148;
+node('place-status').dispatch('pointerdown', { clientY: 700, pointerId: 2, currentTarget: node('place-status') });
+node('place-status').dispatch('pointermove', { clientY: 670 });
+node('place-sheet').offsetHeight = 178;
+node('place-status').dispatch('pointerup', {});
+assert.equal(node('place-sheet')['data-size'], 'half', 'a short drag on the status line still moves one step up');
 delete context.window.matchMedia;
 node('place-dialog').close();
 geoFix = { latitude: 35.71, longitude: 139.79 }; // Asakusa
