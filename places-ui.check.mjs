@@ -65,6 +65,17 @@ node('place-handle').dispatch('click');
 assert.equal(node('place-sheet')['data-size'], 'half', 'handle raises the sheet');
 context.placeMap.onclick();
 assert.equal(node('place-sheet')['data-size'], 'peek', 'tapping the map lowers the sheet');
+Object.assign(context.window, { innerHeight: 844, matchMedia: () => ({ matches: false }) });
+node('place-handle').setPointerCapture = () => {};
+node('place-sheet').offsetHeight = 148;
+node('place-handle').dispatch('pointerdown', { clientY: 700, pointerId: 1 });
+node('place-handle').dispatch('pointermove', { clientY: 150 });
+assert.equal(node('place-sheet').style.height, '698px', 'sheet follows the finger');
+node('place-sheet').offsetHeight = 698;
+node('place-handle').dispatch('pointerup', {});
+node('place-handle').dispatch('click');
+assert.equal(node('place-sheet')['data-size'], 'full', 'release snaps to the nearest size; the trailing click is ignored');
+delete context.window.matchMedia;
 node('place-dialog').close();
 geoFix = { latitude: 35.71, longitude: 139.79 }; // Asakusa
 await context.openPlaceSearch();

@@ -542,12 +542,48 @@
     document.getElementById('place-sheet').setAttribute('data-size', size);
     document.getElementById('place-handle').setAttribute('aria-label', size === 'full' ? '목록 작게 보기' : '목록 크게 보기');
   }
-  document.getElementById('place-handle').addEventListener('click', function () { setSheet(SHEET_NEXT[sheetSize]); });
+  function sheetHeights() { var h = window.innerHeight || 0; return { peek: 148, half: h / 2, full: h - 80 }; }
+  // Drag the handle to resize; on release snap to the nearest size. A plain tap still steps peek → half → full.
+  var handle = document.getElementById('place-handle');
+  var drag = null;
+  var dragged = false;
+  handle.addEventListener('click', function () {
+    if (dragged) { dragged = false; return; }
+    setSheet(SHEET_NEXT[sheetSize]);
+  });
+  handle.addEventListener('pointerdown', function (e) {
+    if (isWide()) return;
+    var sheet = document.getElementById('place-sheet');
+    drag = { y: e.clientY, h: sheet.offsetHeight, moved: false };
+    handle.setPointerCapture(e.pointerId);
+    sheet.style.transition = 'none';
+  });
+  handle.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    var dy = drag.y - e.clientY;
+    if (Math.abs(dy) > 6) drag.moved = true;
+    var max = sheetHeights().full;
+    document.getElementById('place-sheet').style.height = Math.min(max, Math.max(120, drag.h + dy)) + 'px';
+  });
+  function endDrag() {
+    if (!drag) return;
+    var sheet = document.getElementById('place-sheet');
+    var h = sheet.offsetHeight;
+    var sizes = sheetHeights();
+    sheet.style.height = '';
+    sheet.style.transition = '';
+    if (drag.moved) {
+      dragged = true;
+      setSheet(Object.keys(sizes).reduce(function (best, k) { return Math.abs(sizes[k] - h) < Math.abs(sizes[best] - h) ? k : best; }, 'peek'));
+    }
+    drag = null;
+  }
+  handle.addEventListener('pointerup', endDrag);
+  handle.addEventListener('pointercancel', endDrag);
   // Map area the sheet leaves uncovered; uses target sizes so it is right while the sheet animates.
   function mapPadding() {
     if (isWide()) return { top: 48, right: 48, bottom: 48, left: 12 + 380 + 48 };
-    var h = window.innerHeight || 0;
-    return { top: 88, right: 32, bottom: { peek: 148, half: h / 2, full: h - 80 }[sheetSize] + 24, left: 32 };
+    return { top: 88, right: 32, bottom: sheetHeights()[sheetSize] + 24, left: 32 };
   }
   function focusOn(location) {
     var p = mapPadding();
