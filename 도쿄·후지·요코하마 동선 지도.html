@@ -421,8 +421,7 @@
     if (!candidate) return;
     picked = candidate;
     showPicked();
-    searchDialog.close();
-    document.getElementById('f-memo').focus();
+    searchDialog.close(); // no memo auto-focus: it would pop the phone keyboard on return
   });
   function loadMaps() {
     if (mapsReady) return mapsReady;

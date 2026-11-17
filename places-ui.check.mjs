@@ -144,6 +144,7 @@ assert.match(node('place-status').textContent, /불러오지/);
 node('place-choose').dispatch('click');
 assert.equal(context.picked.name, '라멘');
 assert.equal(node('place-dialog').open, false);
+assert.ok(!node('f-memo').focused, 'choosing a place does not focus the memo (no keyboard pop-up)');
 
 node('place-dialog').showModal();
 let finishSlow;
