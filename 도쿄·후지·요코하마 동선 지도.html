@@ -440,7 +440,8 @@
     var box = document.getElementById('f-picked');
     if (!box) return;
     box.hidden = !picked;
-    box.innerHTML = picked ? '<b>' + esc(picked.name) + '</b>' + (picked.address ? '<span>' + esc(picked.address) + '</span>' : '') : '';
+    box.innerHTML = picked ? '<b>' + esc(picked.name) + '</b>' + (picked.address ? '<span>' + esc(picked.address) + '</span>' : '') +
+      '<button type="button" class="picked-clear" aria-label="선택한 장소 지우기">✕</button>' : '';
   }
   function mountPlaceInput() {
     var slot = document.getElementById('f-place');
@@ -791,6 +792,7 @@
       .then(function () { btn.disabled = false; });
   });
   detail.addEventListener('click', function (e) {
+    if (e.target.closest('.picked-clear')) { picked = null; showPicked(); return; }
     var move = e.target.closest('.move-item');
     if (move) { moveFixedItem(move); return; }
     var del = e.target.closest('.del');
