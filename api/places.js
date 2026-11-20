@@ -1,5 +1,6 @@
 import { Redis } from '@upstash/redis';
 import { randomUUID } from 'node:crypto';
+import { MEMBERS } from '../members.js';
 
 const KEY = 'places';
 const ORDER_KEY = 'timeline-order';
@@ -7,7 +8,7 @@ const DONE_KEY = 'done-days'; // set of days stamped 여행 완료
 // ponytail: flat cap instead of rate limiting; the URL is only shared within the group
 const MAX_PLACES = 300;
 
-function db() {
+export function db() {
   return new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL,
     token: process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN,
@@ -26,7 +27,7 @@ export function parsePlace(body) {
   const by = str(body.by);
   if (!Number.isInteger(day) || day < 5 || day > 12) return null;
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return null;
-  if (!name || name.length > 120 || memo.length > 200 || !by || by.length > 20) return null;
+  if (!name || name.length > 120 || memo.length > 200 || !MEMBERS.includes(by)) return null;
   if (placeId && !/^[A-Za-z0-9_-]{1,300}$/.test(placeId)) return null;
   if (address.length > 200) return null;
   return { day, time, name, placeId, address, memo, by };
@@ -57,7 +58,7 @@ export default async function handler(req, res) {
     }
     if (req.method === 'POST') {
       const place = parsePlace(req.body);
-      if (!place) return res.status(400).json({ error: '시간, 장소, 닉네임(20자 이내)을 확인해 주세요.' });
+      if (!place) return res.status(400).json({ error: '시간, 장소, 추가하는 사람을 확인해 주세요.' });
       if ((await db().hlen(KEY)) >= MAX_PLACES) return res.status(409).json({ error: '저장할 수 있는 장소 수를 넘었어요.' });
       const item = { id: randomUUID(), ...place, at: Date.now() };
       await db().hset(KEY, { [item.id]: item });
