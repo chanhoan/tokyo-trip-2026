@@ -42,6 +42,7 @@ header { display: flex; justify-content: space-between; align-items: flex-end; g
 h1 { font-weight: 700; font-size: clamp(24px, 4vw, 34px); line-height: 1.25; margin: 0; text-wrap: balance; }
 h2 { font-weight: 700; font-size: 20px; margin: 0; text-wrap: balance; }
 .title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.title-row h1 { touch-action: manipulation; user-select: none; -webkit-user-select: none; } /* rapid taps (face rain) must not zoom or select */
 .crew-open { min-height: 36px; padding-inline: 14px; font-weight: 700; }
 /* 참가자 picture: wide image at a readable height; phones scroll it sideways, starting on the left column of faces */
 .crew-dialog { max-width: calc(100vw - 24px); max-height: none; padding: 0; border: 0; border-radius: 12px; background: #000; overflow-x: auto; overscroll-behavior: contain; }

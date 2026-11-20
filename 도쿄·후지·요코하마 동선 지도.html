@@ -1124,6 +1124,28 @@
   var crew = document.getElementById('crew-dialog');
   document.getElementById('crew-open').addEventListener('click', function () { crew.showModal(); });
   crew.addEventListener('click', function () { crew.close(); });
+  // easter egg: tap the title 5 times within 1.5s → the 8 faces rain down
+  var taps = 0, tapTimer;
+  document.querySelector('.title-row h1').addEventListener('click', function () {
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(function () { taps = 0; }, 1500);
+    if (++taps < 5) return;
+    taps = 0;
+    if (!reduceMotion) faceRain();
+  });
+  function faceRain() {
+    for (var i = 0; i < 40; i++) {
+      var img = document.createElement('img'), size = 40 + Math.random() * 40;
+      img.src = 'fav-' + (i % 8) + '.png';
+      img.alt = '';
+      img.style.cssText = 'position:fixed;top:-100px;left:' + Math.random() * 95 + 'vw;width:' + size + 'px;height:' + size + 'px;border-radius:50%;pointer-events:none;z-index:9999';
+      document.body.appendChild(img);
+      img.animate(
+        [{ transform: 'translateY(0) rotate(0deg)' }, { transform: 'translateY(calc(100vh + 200px)) rotate(' + (Math.random() * 720 - 360) + 'deg)' }],
+        { duration: 1800 + Math.random() * 1500, delay: Math.random() * 1200, easing: 'ease-in' }
+      ).onfinish = img.remove.bind(img);
+    }
+  }
   window.addEventListener('resize', function () { renderMap(byDay(current), false); });
   window.addEventListener('hashchange', function () { var h = fromHash(); if (h) { current = h; render(); } });
   document.addEventListener('keydown', function (e) {
