@@ -162,7 +162,7 @@ section[id^="v-"] { display: grid; gap: 16px; }
 <dialog id="exp" class="sheet" aria-labelledby="exp-title">
   <form id="exp-form" novalidate>
     <div class="d-grip" id="exp-grip" aria-hidden="true"><span></span></div>
-    <div class="d-head" id="exp-head"><h2 id="exp-title">차수 추가</h2><button type="button" class="d-x" id="exp-close" aria-label="닫기">×</button></div>
+    <div class="d-head" id="exp-head"><h2 id="exp-title" tabindex="-1" autofocus>차수 추가</h2><button type="button" class="d-x" id="exp-close" aria-label="닫기">×</button></div>
     <label class="s-field">금액<span class="s-amount"><span aria-hidden="true">¥</span><input id="f-amount" type="text" inputmode="numeric" autocomplete="off" aria-label="금액 (엔)"></span></label>
     <label class="s-field">내용<input id="f-title" type="text" maxlength="40" autocomplete="off" placeholder="예: 라멘"></label>
     <fieldset class="s-field"><legend>낸 사람</legend><div class="chips" id="f-payer"></div></fieldset>
@@ -340,8 +340,7 @@ function openExpense(item) {
   $('f-del').hidden = !item;
   $('f-err').textContent = '';
   updatePer();
-  $('exp').showModal();
-  if (!item) $('f-amount').focus();
+  $('exp').showModal(); // no input focus: on phones it pops the keyboard over the sheet
 }
 
 $('add-btn').addEventListener('click', () => openExpense());
