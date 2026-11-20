@@ -75,10 +75,10 @@ section[id^="v-"] { display: grid; gap: 16px; }
 .s-terms dd { margin: 0; }
 .s-share { margin: 0; padding: 10px 12px; background: var(--card); border: 1px dashed var(--muted); border-radius: 10px; font: 12px/1.6 var(--font-mono); white-space: pre-wrap; }
 /* dialogs: centred window by default (mouse), bottom sheet on touch screens */
-.sheet, .confirm { border: 0; padding: 20px; background: var(--card); color: var(--ink); border-radius: 16px; box-shadow: 0 8px 32px rgb(0 0 0 / .25); }
+.sheet, .confirm, .roulette { border: 0; padding: 20px; background: var(--card); color: var(--ink); border-radius: 16px; box-shadow: 0 8px 32px rgb(0 0 0 / .25); }
 .sheet { width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
 .confirm { width: min(320px, calc(100vw - 48px)); }
-.sheet::backdrop, .confirm::backdrop { background: rgb(29 33 36 / .45); }
+.sheet::backdrop, .confirm::backdrop, .roulette::backdrop { background: rgb(29 33 36 / .45); }
 @media (pointer: coarse) {
   .sheet { width: 100%; max-width: 560px; max-height: 92dvh; margin: auto auto 0; border-radius: 18px 18px 0 0; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
 }
@@ -105,6 +105,29 @@ section[id^="v-"] { display: grid; gap: 16px; }
 .confirm p { margin: 0 0 16px; font-size: 16px; font-weight: 700; }
 .confirm button { flex: 1; min-height: 44px; border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer; border: 1px solid var(--rule); background: var(--card); color: var(--ink); }
 .confirm button[value="ok"] { border: 0; background: var(--accent); color: #fff; }
+/* 룰렛 쏘기: the server has already drawn the name; the wheel only reveals it */
+.roll { flex: 1; min-height: 48px; border: 0; border-radius: 12px; background: var(--ink); color: var(--card); font-size: 16px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.roll:disabled { opacity: .5; cursor: default; }
+.s-row .treat { color: var(--accent); font-weight: 700; }
+.s-row .roll-note { white-space: nowrap; } /* keep the date and time on one line */
+.roulette { width: min(360px, calc(100vw - 32px)); text-align: center; }
+.roulette h2 { font-size: 18px; overflow-wrap: anywhere; }
+#roulette-title:focus { outline: none; } /* takes focus so no button gets a focus ring on open */
+.wheel-box { position: relative; width: min(100%, 280px); aspect-ratio: 1; margin: 28px auto 18px; }
+.wheel-box::before { content: ""; position: absolute; z-index: 1; left: 50%; top: -14px; transform: translateX(-50%); border: 11px solid transparent; border-top: 22px solid var(--ink); border-bottom: 0; } /* pin */
+.wheel-box::after { content: ""; position: absolute; left: 50%; top: 50%; width: 14%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; background: var(--card); box-shadow: 0 0 0 3px var(--ink); } /* hub */
+.wheel { position: relative; width: 100%; height: 100%; border-radius: 50%; box-shadow: 0 0 0 4px var(--ink); }
+/* each name sits on a full-size layer turned to its slice, so it reads upright when the slice is under the pin */
+.wheel span { position: absolute; inset: 0; display: grid; justify-content: center; align-content: start; padding-top: 12%; color: #fff; font-size: 16px; font-weight: 700; text-shadow: 0 1px 2px rgb(0 0 0 / .55); }
+#roulette-result { margin: 0 0 4px; min-height: 34px; font-size: 17px; }
+#roulette-meta { margin: 0 0 16px; font-size: 12px; color: var(--muted); }
+/* 룰렛 이력: when each draw happened, who it was drawn from, who came up; the last one is the current result */
+.rolls { margin: 0; padding-left: 22px; display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.rolls span:first-child { font-family: var(--font-mono); }
+.rolls li > * + * { margin-left: 8px; }
+.rolls b { color: var(--ink); }
+.rolls li:last-child b { color: var(--accent); }
+#roulette-result b { font-size: 22px; color: var(--accent); }
 </style>
 <div class="wrap s-wrap">
 <header class="s-top">
@@ -169,13 +192,22 @@ section[id^="v-"] { display: grid; gap: 16px; }
     <label class="s-field">금액<span class="s-amount"><span aria-hidden="true">¥</span><input id="f-amount" type="text" inputmode="numeric" autocomplete="off" aria-label="금액 (엔)"></span></label>
     <label class="s-field">내용<input id="f-title" type="text" maxlength="40" autocomplete="off" placeholder="예: 라멘"></label>
     <fieldset class="s-field"><legend>낸 사람</legend><div class="chips" id="f-payer"></div></fieldset>
-    <fieldset class="s-field"><legend>참석자</legend><div class="chips split" id="f-split"></div></fieldset>
+    <fieldset class="s-field"><legend id="f-split-legend">참석자</legend><div class="chips split" id="f-split"></div></fieldset>
+    <div class="s-field" id="f-rolls" hidden>룰렛 이력<ol class="rolls" id="f-roll-list"></ol></div>
     <div style="display: grid; gap: 10px">
       <div class="d-per"><span id="f-count" style="color: var(--muted)"></span><b id="f-per"></b></div>
       <p class="d-err" id="f-err" role="alert"></p>
-      <div class="d-actions"><button type="button" class="danger" id="f-del">삭제</button><button type="submit" class="primary" id="f-save">저장</button></div>
+      <div class="d-actions"><button type="button" class="danger" id="f-del">삭제</button><button type="submit" class="primary" id="f-save">1/N 저장</button><button type="button" class="roll" id="f-roll">룰렛 쏘기</button></div>
     </div>
   </form>
+</dialog>
+
+<dialog id="roulette" class="roulette" aria-labelledby="roulette-title">
+  <h2 id="roulette-title" tabindex="-1" autofocus></h2>
+  <div class="wheel-box"><div class="wheel" id="wheel"></div></div>
+  <p id="roulette-result" role="status" aria-live="polite"></p>
+  <p id="roulette-meta"></p>
+  <button type="button" class="primary" id="roulette-ok">확인</button>
 </dialog>
 
 <dialog id="confirm" class="confirm" aria-labelledby="c-text">
@@ -186,7 +218,7 @@ section[id^="v-"] { display: grid; gap: 16px; }
 </dialog>
 
 <script type="module">
-import { yen, settle, treasurerOf, shareText } from './settle-calc.js';
+import { yen, settle, treasurerOf, shareText, wheelAngle, iGa, when } from './settle-calc.js';
 import { MEMBERS } from './members.js';
 
 const $ = (id) => document.getElementById(id);
@@ -254,6 +286,9 @@ function attendees(e) {
   return all ? `모두 ${e.split.length}명` : e.split.map(esc).join('·');
 }
 
+const lastRoll = (e) => e.rolls?.[e.rolls.length - 1];
+const rollNote = (e) => (e.rolls?.length ? ` · <span class="roll-note">룰렛 ${e.rolls.length}회 · ${when(lastRoll(e).at)}</span>` : '');
+
 function renderHome() {
   const rows = settle(expenses, MEMBERS);
   const treasurer = expenses.length ? treasurerOf(rows, config.treasurer) : config.treasurer;
@@ -264,7 +299,8 @@ function renderHome() {
   $('h-list').innerHTML = expenses.length
     ? expenses.map((e, i) => `<li><button type="button" class="s-row" data-id="${esc(e.id)}">` +
         `<span class="n">${i + 1}차</span><span class="t">${esc(e.title)}</span><span class="a">${yen(e.amount)}</span>` +
-        `<span class="m">${esc(e.payer)} 냄 · ${attendees(e)} · 1인 ${yen(Math.floor(e.amount / e.split.length))}</span></button></li>`).join('')
+        `<span class="m">${esc(e.payer)} 냄 · ` + (e.treat ? `<span class="treat">${esc(e.treat)}${iGa(e.treat)} 쏩니다!</span>`
+          : `${attendees(e)} · 1인 ${yen(Math.floor(e.amount / e.split.length))}`) + rollNote(e) + '</span></button></li>').join('')
     : '<li class="s-empty">아직 차수가 없어요. 아래 ‘+ 차수 추가’로 시작해 주세요.</li>';
 }
 
@@ -328,6 +364,11 @@ const picked = (name) => [...document.querySelectorAll(`#exp-form input[name="${
 
 function updatePer() {
   const count = picked('split').length;
+  if (editing?.treat) { // the amount is theirs alone; the chips only choose who is in the next spin
+    $('f-count').textContent = `${editing.treat}${iGa(editing.treat)} 쏩니다 · 다음 룰렛 ${count}명`;
+    $('f-per').textContent = yen(amountValue());
+    return;
+  }
   $('f-count').textContent = count ? `${count}명 · 1인` : '참석자를 골라 주세요';
   $('f-per').textContent = count ? yen(Math.floor(amountValue() / count)) : '';
 }
@@ -339,7 +380,14 @@ function openExpense(item) {
   $('f-amount').value = item ? num(item.amount) : '';
   $('f-title').value = item ? item.title : '';
   $('f-payer').innerHTML = MEMBERS.map((m) => chip('radio', 'payer', m, m, item ? item.payer === m : false)).join('');
-  $('f-split').innerHTML = MEMBERS.map((m) => chip('checkbox', 'split', m, m, item ? item.split.includes(m) : true)).join('');
+  const pool = item?.treat ? lastRoll(item)?.among ?? MEMBERS : item?.split; // a rolled 차수 reopens with the people it was drawn from
+  $('f-split').innerHTML = MEMBERS.map((m) => chip('checkbox', 'split', m, m, item ? pool.includes(m) : true)).join('');
+  $('f-split-legend').textContent = (item?.treat ? '룰렛 인원' : '참석자') + ' · 이름을 누르면 빠져요';
+  $('f-save').textContent = item?.treat ? '저장' : '1/N 저장';
+  $('f-roll').textContent = item?.rolls?.length ? '다시 돌리기' : '룰렛 쏘기';
+  $('f-rolls').hidden = !item?.rolls?.length;
+  $('f-roll-list').innerHTML = (item?.rolls ?? []).map((r) =>
+    `<li><span>${when(r.at)}</span><span>${attendees({ split: r.among })} 중</span><b>${esc(r.winner)}</b></li>`).join('');
   $('f-del').hidden = !item;
   $('f-err').textContent = '';
   updatePer();
@@ -359,24 +407,58 @@ $('f-amount').addEventListener('input', () => {
 });
 $('f-split').addEventListener('change', updatePer);
 
-$('exp-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const body = { title: $('f-title').value.trim(), amount: amountValue(), payer: picked('payer')[0] || '', split: picked('split') };
+// roll = false: 1/N among the 참석자. roll = true: 룰렛 쏘기, the server draws one of them to pay it all.
+async function saveExpense(roll) {
+  // A plain save of a rolled 차수 keeps its result: there the chips only choose who is in the next spin.
+  const split = !roll && editing?.treat ? [editing.treat] : picked('split');
+  const body = { title: $('f-title').value.trim(), amount: amountValue(), payer: picked('payer')[0] || '', split };
   const problem = !body.amount ? '금액을 넣어 주세요.' : !body.title ? '내용을 넣어 주세요.'
-    : !body.payer ? '낸 사람을 골라 주세요.' : !body.split.length ? '참석자를 한 명 이상 골라 주세요.' : '';
+    : !body.payer ? '낸 사람을 골라 주세요.' : !body.split.length ? '참석자를 한 명 이상 골라 주세요.'
+    : roll && body.split.length < 2 ? '룰렛은 참석자가 두 명 이상일 때 돌릴 수 있어요.' : '';
   if (problem) { $('f-err').textContent = problem; return; }
-  $('f-save').disabled = true;
+  $('f-save').disabled = $('f-roll').disabled = true;
   try {
-    const saved = await api(editing ? 'PUT' : 'POST', body, editing?.id);
-    expenses = editing ? expenses.map((x) => (x.id === saved.id ? saved : x)) : [...expenses, saved];
+    const saved = await api(editing ? 'PUT' : 'POST', roll ? { ...body, roll: true } : body, editing?.id);
     $('exp').close();
+    if (roll) await spin(saved, body.split); // the list shows who pays only after the wheel has stopped
+    expenses = editing ? expenses.map((x) => (x.id === saved.id ? saved : x)) : [...expenses, saved];
     render();
   } catch (err) {
     $('f-err').textContent = err.message;
   } finally {
-    $('f-save').disabled = false;
+    $('f-save').disabled = $('f-roll').disabled = false;
   }
-});
+}
+$('exp-form').addEventListener('submit', (e) => { e.preventDefault(); saveExpense(false); });
+$('f-roll').addEventListener('click', () => saveExpense(true));
+
+// ── 룰렛 쏘기: turn the wheel to the name the server drew; resolves when the dialog is closed ──
+const SPIN_MS = 4200;
+const WHEEL_COLORS = ['var(--d7)', 'var(--d9)', 'var(--d10)', 'var(--d5)', 'var(--d11)']; // dark enough for white names
+let spinTimer = 0;
+function spin(item, names) {
+  const wheel = $('wheel');
+  const slice = 360 / names.length;
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  wheel.style.transition = 'none';
+  wheel.style.transform = '';
+  wheel.style.background = `conic-gradient(${names.map((_, i) => `${WHEEL_COLORS[i % WHEEL_COLORS.length]} ${i * slice}deg ${(i + 1) * slice}deg`).join(', ')})`;
+  wheel.innerHTML = names.map((n, i) => `<span style="transform: rotate(${(i + 0.5) * slice}deg)">${esc(n)}</span>`).join('');
+  $('roulette-title').textContent = `${item.title} · ${yen(item.amount)}`;
+  $('roulette-result').textContent = '두구두구…';
+  $('roulette-meta').textContent = `${item.rolls.length}회째 룰렛 · ${when(lastRoll(item).at)}`;
+  $('roulette-ok').disabled = true;
+  $('roulette').showModal();
+  void wheel.offsetWidth; // flush the reset so the turn starts from 0
+  if (!still) wheel.style.transition = `transform ${SPIN_MS}ms cubic-bezier(.12, .6, .1, 1)`;
+  wheel.style.transform = `rotate(${wheelAngle(names.indexOf(item.treat), names.length, Math.random() - 0.5)}deg)`;
+  spinTimer = setTimeout(() => {
+    $('roulette-result').innerHTML = `<b>${esc(item.treat)}</b>${iGa(item.treat)} 쏩니다!`;
+    $('roulette-ok').disabled = false;
+  }, still ? 0 : SPIN_MS);
+  return new Promise((resolve) => $('roulette').addEventListener('close', () => { clearTimeout(spinTimer); resolve(); }, { once: true }));
+}
+$('roulette-ok').addEventListener('click', () => $('roulette').close());
 
 $('f-del').addEventListener('click', () => {
   $('c-text').textContent = `${expenses.indexOf(editing) + 1}차를 삭제할까요?`;
@@ -430,7 +512,7 @@ sheet.addEventListener('close', () => { sheet.classList.remove('settling'); shee
 
 // ── sync: refetch so others' changes show up ──
 window.addEventListener('hashchange', render);
-const idle = () => !document.hidden && !$('exp').open && !$('confirm').open && view() !== 'setup';
+const idle = () => !document.hidden && !$('exp').open && !$('confirm').open && !$('roulette').open && view() !== 'setup'; // a refresh mid-spin would show the result early
 setInterval(() => { if (idle()) load(); }, POLL_MS);
 document.addEventListener('visibilitychange', () => { if (idle()) load(); });
 load();

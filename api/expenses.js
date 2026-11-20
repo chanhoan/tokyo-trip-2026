@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { db } from './places.js';
 import { MEMBERS } from '../members.js';
 
@@ -7,6 +7,7 @@ const CONFIG_KEY = 'settle-config';
 // ponytail: flat cap instead of rate limiting, same as places
 const MAX_EXPENSES = 300;
 const MAX_AMOUNT = 10_000_000;
+const MAX_ROLLS = 50; // per 차수; bounds the stored history
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
 // Members are fixed (members.js); the only setting is the 총무, '' = whoever paid the most.
@@ -27,6 +28,17 @@ export function parseExpense(body) {
   return { title, amount, payer, split };
 }
 
+// 룰렛 쏘기: one 참석자 is drawn here, not in the browser, and pays the whole 차수.
+// Stored as split = [winner] so settle() needs no special case; `treat` only marks it for display.
+// It can be spun again, so every draw is appended to `rolls` with the server's clock and the people it was drawn from:
+// a quiet re-roll or a shrunken pool stays visible. Without a roll, an edit keeps the mark only while that person still pays alone.
+// shortcut: two spins of one 차수 in the same instant can drop one history entry (read-then-write); use a Redis list per 차수 if that ever matters.
+export function treated(expense, roll, old = {}, pick = randomInt, now = Date.now()) {
+  if (!roll) return { ...expense, treat: expense.split.length === 1 && expense.split[0] === old.treat ? old.treat : undefined };
+  const treat = expense.split[pick(expense.split.length)];
+  return { ...expense, split: [treat], treat, rolls: [...(old.rolls ?? []), { at: now, among: expense.split, winner: treat }] };
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
@@ -45,15 +57,18 @@ export default async function handler(req, res) {
     if (req.method === 'POST' || req.method === 'PUT') {
       const expense = parseExpense(req.body);
       if (!expense) return res.status(400).json({ error: '금액, 내용, 낸 사람, 참석자를 확인해 주세요.' });
+      const roll = req.body.roll === true;
+      if (roll && expense.split.length < 2) return res.status(400).json({ error: '룰렛은 참석자가 두 명 이상일 때 돌릴 수 있어요.' });
       if (req.method === 'POST') {
         if ((await db().hlen(KEY)) >= MAX_EXPENSES) return res.status(409).json({ error: '저장할 수 있는 차수 수를 넘었어요.' });
-        const item = { id: randomUUID(), ...expense, at: Date.now() };
+        const item = { id: randomUUID(), ...treated(expense, roll), at: Date.now() };
         await db().hset(KEY, { [item.id]: item });
         return res.status(201).json(item);
       }
       const old = await db().hget(KEY, id);
       if (!old) return res.status(404).json({ error: '이미 지워진 차수예요.' });
-      const item = { ...old, ...expense };
+      if (roll && (old.rolls?.length ?? 0) >= MAX_ROLLS) return res.status(409).json({ error: '이 차수는 룰렛을 더 돌릴 수 없어요.' });
+      const item = { ...old, ...treated(expense, roll, old) };
       await db().hset(KEY, { [id]: item });
       return res.status(200).json(item);
     }

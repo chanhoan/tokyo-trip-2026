@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { settle, treasurerOf, shareText, yen } from './settle-calc.js';
-import { parseConfig, parseExpense } from './api/expenses.js';
+import { settle, treasurerOf, shareText, yen, wheelAngle, iGa, when } from './settle-calc.js';
+import { parseConfig, parseExpense, treated } from './api/expenses.js';
 import { MEMBERS } from './members.js';
 import { readFileSync } from 'node:fs';
 
@@ -47,3 +47,33 @@ for (const bad of [{ ...ok, title: '' }, { ...ok, amount: 0 }, { ...ok, amount: 
   assert.equal(parseExpense(bad), null, JSON.stringify(bad));
 }
 console.log('expense parsing ok');
+
+// 룰렛 쏘기: one 참석자 is drawn and pays the whole 차수; the settlement follows with no special case.
+const cafe = { title: '카페', amount: 10000, payer: '정찬환', split: [...MEMBERS] };
+MEMBERS.forEach((name, i) => {
+  const drawn = treated(cafe, true, {}, (n) => { assert.equal(n, MEMBERS.length); return i; }, 111);
+  assert.deepEqual(drawn, { ...cafe, split: [name], treat: name, rolls: [{ at: 111, among: cafe.split, winner: name }] }, 'every 참석자 can be drawn');
+});
+const shot = treated(cafe, true, {}, () => 1, 111);
+assert.deepEqual(Object.fromEntries(settle([shot], MEMBERS).map((r) => [r.name, r.net])),
+  { 정찬환: 10000, 정상범: -10000, 한승남: 0, 이영석: 0, 하지원: 0 }, 'the drawn person owes the payer the whole amount');
+// 이력: it can be spun again, and every draw stays on record with its time and the people it was drawn from.
+const four = MEMBERS.filter((m) => m !== '하지원');
+const again = treated({ ...cafe, split: four }, true, shot, () => 0, 222);
+assert.equal(again.treat, '정찬환', 'the latest draw decides');
+assert.deepEqual(again.rolls, [{ at: 111, among: cafe.split, winner: '정상범' }, { at: 222, among: four, winner: '정찬환' }], 're-rolls pile up, oldest first');
+const fixed = { ...again, ...treated({ ...cafe, amount: 12000, split: ['정찬환'] }, false, again) };
+assert.equal(fixed.treat, '정찬환', 'fixing the amount keeps the result');
+assert.deepEqual(fixed.rolls, again.rolls, 'a plain edit keeps the history');
+assert.equal('rolls' in parseExpense({ ...cafe, rolls: [] }), false, 'the history cannot be written from the browser');
+assert.equal(treated(cafe, false).treat, undefined, '1/N is not marked');
+assert.equal(treated(cafe, false, shot).treat, undefined, 'saving as 1/N again removes the mark');
+assert.equal(when(Date.UTC(2026, 11, 5, 3, 4, 5)), '12/5 12:04:05', 'Tokyo time, whatever the device time zone');
+// The wheel only reveals the server's draw, so it has to stop on that name.
+for (const n of [2, 3, 4, 5]) for (let i = 0; i < n; i++) for (const off of [-0.5, -0.25, 0, 0.25, 0.5]) {
+  const underPin = ((-wheelAngle(i, n, off) % 360) + 360) % 360;
+  assert.equal(Math.floor(underPin / (360 / n)), i, `slice ${i} of ${n}, offset ${off}`);
+}
+assert.equal(iGa('정상범'), '이');
+assert.equal(iGa('김민수'), '가');
+console.log('treat roulette ok');

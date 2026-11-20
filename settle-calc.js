@@ -21,6 +21,24 @@ export function settle(expenses, members) {
   return names.map((name) => ({ name, paid: paid.get(name), owed: owed.get(name), net: paid.get(name) - owed.get(name) }));
 }
 
+/** 이/가 after a Korean name: 가 when the last syllable has no final consonant. */
+export const iGa = (name) => ((name.charCodeAt(name.length - 1) - 0xac00) % 28 === 0 ? '가' : '이');
+
+/**
+ * Degrees to turn the roulette so slice `index` of `n` stops under the pin at the top.
+ * Slices run clockwise from the top; `offset` (−0.5…0.5) is where inside the slice the pin lands, kept off the edges.
+ */
+export function wheelAngle(index, n, offset) {
+  return 360 * 6 - (index + 0.5 + offset * 0.8) * (360 / n);
+}
+
+const clock = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+/** Server timestamp → "12/5 14:35:07" on the trip's clock (Tokyo, same as Korea), whatever the device's time zone. */
+export function when(at) {
+  const p = Object.fromEntries(clock.formatToParts(at).map((x) => [x.type, x.value]));
+  return `${Number(p.month)}/${Number(p.day)} ${p.hour}:${p.minute}:${p.second}`; // some locales pad the day even when asked for 'numeric'
+}
+
 /** Configured 총무, or whoever paid the most. */
 export function treasurerOf(rows, configured) {
   if (configured && rows.some((r) => r.name === configured)) return configured;
