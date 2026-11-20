@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const html = readFileSync('index.html', 'utf8');
@@ -84,3 +84,7 @@ await doneContext.toggleDone();
 assert.deepEqual(Array.from(doneContext.doneDays), [], 'failed save keeps the previous stamps');
 assert.equal(doneContext.alerted, true);
 console.log('done stamps ok');
+// 참가자 picture: the file the dialog points at has to ship with the page
+const crewSrc = html.match(/<dialog id="crew-dialog"[\s\S]*?<img src="([^"]+)"/)?.[1];
+assert.ok(crewSrc && existsSync(crewSrc), 'crew picture is in the repo under the name the page uses');
+console.log('crew picture ok');

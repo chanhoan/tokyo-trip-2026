@@ -39,6 +39,13 @@ header { display: grid; gap: 4px; }
 .kicker { font-family: var(--font-mono); font-size: 13px; color: var(--muted); letter-spacing: .04em; }
 h1 { font-weight: 700; font-size: clamp(24px, 4vw, 34px); line-height: 1.25; margin: 0; text-wrap: balance; }
 h2 { font-weight: 700; font-size: 20px; margin: 0; text-wrap: balance; }
+.title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.crew-open { min-height: 36px; padding-inline: 14px; font-weight: 700; }
+/* 참가자 picture: wide image at a readable height; phones scroll it sideways, starting on the left column of faces */
+.crew-dialog { max-width: calc(100vw - 24px); max-height: none; padding: 0; border: 0; border-radius: 12px; background: #000; overflow-x: auto; overscroll-behavior: contain; }
+.crew-dialog::backdrop { background: rgb(0 0 0 / .75); }
+.crew-dialog img { display: block; height: min(72dvh, 1401px); width: auto; max-width: none; cursor: zoom-out; }
+.crew-close { position: fixed; top: 12px; right: 12px; width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgb(0 0 0 / .65); color: #fff; font-size: 18px; cursor: pointer; }
 .sec-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .hint { font-size: 13px; color: var(--muted); }
 button { font: inherit; color: inherit; }

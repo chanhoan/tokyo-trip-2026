@@ -11,7 +11,7 @@
 <div class="wrap">
 <header>
   <div class="kicker">2026.12.5 – 12.12 · 7박 8일</div>
-  <h1>도쿄 여행</h1>
+  <div class="title-row"><h1>도쿄 여행</h1><button type="button" class="toggle crew-open" id="crew-open">참가자</button></div>
 </header>
 <section aria-labelledby="h-ov">
   <div class="sec-head">
@@ -182,6 +182,13 @@
       <button id="place-choose" type="button" disabled>이 장소 선택</button>
     </div>
   </section>
+</dialog>
+<dialog id="crew-dialog" class="crew-dialog" lang="ko" aria-labelledby="crew-title">
+  <!-- same focus trick as the place dialog: no focus ring on the close button when it opens -->
+  <h2 id="crew-title" class="vh" tabindex="-1" autofocus>참가자</h2>
+  <button type="button" class="crew-close" aria-label="참가자 사진 닫기">✕</button>
+  <!-- lazy: fetched only once the dialog is opened -->
+  <img src="crew.jpg" alt="12월 일본 여행 참가자, 광주 5반 밴픽 화면" width="2400" height="1401" loading="lazy">
 </dialog>
 <script>
 (function () {
@@ -1105,10 +1112,14 @@
   }
 
   toggle.addEventListener('click', function () { showAll = !showAll; renderMap(byDay(current)); });
+  // 참가자: the group picture; any click (picture, backdrop or ✕) closes it
+  var crew = document.getElementById('crew-dialog');
+  document.getElementById('crew-open').addEventListener('click', function () { crew.showModal(); });
+  crew.addEventListener('click', function () { crew.close(); });
   window.addEventListener('resize', function () { renderMap(byDay(current), false); });
   window.addEventListener('hashchange', function () { var h = fromHash(); if (h) { current = h; render(); } });
   document.addEventListener('keydown', function (e) {
-    if (searchDialog.open) return;
+    if (searchDialog.open || crew.open) return;
     if (e.target.closest && e.target.closest('input, textarea')) return;
     var idx = DAYS.indexOf(byDay(current));
     if (e.key === 'ArrowRight' && idx < DAYS.length - 1) go(DAYS[idx + 1].d);
