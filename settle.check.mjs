@@ -69,6 +69,13 @@ assert.equal('rolls' in parseExpense({ ...cafe, rolls: [] }), false, 'the histor
 assert.equal(treated(cafe, false).treat, undefined, '1/N is not marked');
 assert.equal(treated(cafe, false, shot).treat, undefined, 'saving as 1/N again removes the mark');
 assert.equal(when(Date.UTC(2026, 11, 5, 3, 4, 5)), '12/5 12:04:05', 'Tokyo time, whatever the device time zone');
+// No payer on a roll: the winner pays it themselves, so nobody owes anyone.
+const solo = parseExpense({ ...cafe, payer: '', roll: true });
+assert.equal(parseExpense({ ...cafe, payer: '' }), null, '1/N still needs a payer');
+const self = treated(solo, true, {}, () => 2, 333);
+assert.equal(self.payer, self.treat, 'empty payer becomes the winner');
+assert.ok(settle([self], MEMBERS).every((r) => r.net === 0), 'self-treat settles to zero');
+assert.equal(treated({ ...cafe, payer: '' }, true, shot, () => 0, 444).payer, '정찬환', 'a re-roll with no payer moves it to the new winner');
 // The wheel only reveals the server's draw, so it has to stop on that name.
 for (const n of [2, 3, 4, 5]) for (let i = 0; i < n; i++) for (const off of [-0.5, -0.25, 0, 0.25, 0.5]) {
   const underPin = ((-wheelAngle(i, n, off) % 360) + 360) % 360;

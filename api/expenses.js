@@ -23,7 +23,8 @@ export function parseExpense(body) {
   const split = body?.split;
   if (!title || title.length > 40) return null;
   if (!Number.isInteger(amount) || amount < 1 || amount > MAX_AMOUNT) return null;
-  if (!MEMBERS.includes(payer) || !Array.isArray(split) || !split.length) return null;
+  const payerOk = MEMBERS.includes(payer) || (!payer && body.roll === true); // 룰렛: no payer = the winner pays
+  if (!payerOk || !Array.isArray(split) || !split.length) return null;
   if (!split.every((n) => MEMBERS.includes(n)) || new Set(split).size !== split.length) return null;
   return { title, amount, payer, split };
 }
@@ -36,7 +37,7 @@ export function parseExpense(body) {
 export function treated(expense, roll, old = {}, pick = randomInt, now = Date.now()) {
   if (!roll) return { ...expense, treat: expense.split.length === 1 && expense.split[0] === old.treat ? old.treat : undefined };
   const treat = expense.split[pick(expense.split.length)];
-  return { ...expense, split: [treat], treat, rolls: [...(old.rolls ?? []), { at: now, among: expense.split, winner: treat }] };
+  return { ...expense, payer: expense.payer || treat, split: [treat], treat, rolls: [...(old.rolls ?? []), { at: now, among: expense.split, winner: treat }] };
 }
 
 export default async function handler(req, res) {
