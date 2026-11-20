@@ -174,7 +174,7 @@ svg.map { display: block; width: 100%; height: 320px; }
 .tl li.added .x::before { background: var(--c); }
 .tl li.added .x { display: grid; gap: 1px; padding-right: 66px; } /* same right gutter as the reorder column */
 .tl li.added a { font-weight: 700; justify-self: start; }
-.tl li.added a::after { content: " ↗"; font-weight: 500; font-size: 12px; }
+.tl li a::after { content: " ↗"; font-weight: 500; font-size: 12px; }
 .tl .addr, .tl .by { font-size: 12px; color: var(--muted); }
 .tl .memo { font-size: 14px; }
 .tl .tl-note { display: block; font-size: 13px; color: var(--muted); padding-top: 8px; }

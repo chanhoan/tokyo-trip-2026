@@ -210,19 +210,19 @@
     { d: 6, dow: '일', title: '아키하바라, 시부야', short: '아키하바라 · 시부야', night: 'asakusa',
       items: [['오전', '아키하바라'], ['이동', '긴자선 (아키하바라는 스에히로초역에서 도보 약 5분)']] },
     { d: 7, dow: '월', title: '신칸센으로 후지산 남쪽', short: '후지산 남쪽', night: 'fuji', move: ['아사쿠사', '후지시'], moveNote: '캐리어는 아사쿠사 숙소에 두고 1박 짐만',
-      items: [['09:50', '1박 짐만 챙겨 아사쿠사 출발'], ['10:27', '도쿄역 고다마 817 탑승'], ['11:32', '신후지 도착'], ['오후', '후지 꿈의 대교'], ['저녁', '온천 유라기노사토']],
+      items: [['09:50', '1박 짐만 챙겨 아사쿠사 출발'], ['10:27', '도쿄역 고다마 817 탑승', '', [['도쿄역', '東京駅']]], ['11:32', '신후지 도착'], ['오후', '후지 꿈의 대교', '', [['후지 꿈의 대교', '富士夢の大橋']]], ['저녁', '온천 유라기노사토', '', [['온천 유라기노사토', '湯らぎの里 富士市']]]],
       book: [['신칸센', '고다마 817', '도쿄 10:27 → 신후지 11:32 · 14호차 5-B,C,D,E · 예약 2000']] },
     { d: 8, dow: '화', title: '도쿄 복귀', short: '도쿄 복귀', night: 'asakusa', move: ['후지시', '아사쿠사'],
-      items: [['오전', '숙소 체크아웃'], ['14:13', '고다마 822 탑승'], ['15:18', '도쿄역 도착']],
+      items: [['오전', '숙소 체크아웃'], ['14:13', '신후지역 고다마 822 탑승', '', [['신후지역', '新富士駅']]], ['15:18', '도쿄역 도착']],
       book: [['신칸센', '고다마 822', '신후지 14:13 → 도쿄 15:18 · 13호차 5-B,C,D,E · 예약 2001']] },
     { d: 9, dow: '수', title: '에노시마, 요코하마', short: '에노시마 · 요코하마', night: 'yokohama', move: ['아사쿠사', '요코하마'],
-      items: [['오전', '아사쿠사 체크아웃'], ['오후', '요코하마 숙소 체크인'], ['오후', '에노시마, 요코하마 관광: 아카렌가 창고', '나머지 미정']] },
+      items: [['오전', '아사쿠사 체크아웃'], ['오후', '요코하마 숙소 체크인'], ['오후', '에노시마, 요코하마 관광: 아카렌가 창고', '나머지 미정', [['에노시마', '江の島'], ['아카렌가 창고', '横浜赤レンガ倉庫']]]] },
     { d: 10, dow: '목', title: '도쿄 복귀', short: '요코하마 · 도쿄', night: 'shibuya', move: ['요코하마', '시부야'],
       items: [['오전', '요코하마 체크아웃'], ['오후', '도쿄로 이동, 시부야 숙소 체크인']] },
     { d: 11, dow: '금', title: '가와고에, 도쿄', short: '가와고에 · 도쿄', night: 'shibuya',
-      items: [['오전', '후쿠토신선→도부 도조선 직통, 약 1시간']] },
+      items: [['오전', '후쿠토신선→도부 도조선 직통으로 가와고에역, 약 1시간', '', [['가와고에역', '川越駅']]]] },
     { d: 12, dow: '토', title: '귀국', short: '귀국', night: null, move: ['시부야', '나리타공항'],
-      items: [['오전', '시부야 체크아웃, 긴자선으로 우에노'], ['이동', '스카이라이너로 나리타 (총 약 1시간 30분)'], ['12:30', '공항 도착'], ['15:05', 'WE504 출발, 18:00 인천 도착']],
+      items: [['오전', '시부야 체크아웃, 긴자선으로 우에노역', '', [['우에노역', '上野駅']]], ['이동', '스카이라이너로 나리타 (총 약 1시간 30분)'], ['12:30', '공항 도착'], ['15:05', 'WE504 출발, 18:00 인천 도착']],
       book: [['열차', '스카이라이너', '우에노 → 나리타 · 온라인으로 미리 구매'], ['항공', 'WE504', '나리타 15:05 → 인천 18:00']] }
   ];
   var ov = document.getElementById('ov');
@@ -355,13 +355,19 @@
     return 'https://www.google.com/maps/dir/?api=1&travelmode=transit&destination=' + encodeURIComponent(p.name) +
       (p.placeId ? '&destination_place_id=' + encodeURIComponent(p.placeId) : '');
   }
+  // item[3]: [[label, mapsQuery]] — turns each label inside the text into a directions link
+  function itemText(it) {
+    return (it[3] || []).reduce(function (html, l) {
+      return html.replace(esc(l[0]), '<a href="' + esc(mapsUrl({ name: l[1] })) + '" target="_blank" rel="noopener">' + esc(l[0]) + '</a>');
+    }, esc(it[1]));
+  }
   function renderTimeline() {
     var ol = document.getElementById('tl');
     if (!ol) return;
     var rows = timelineRows(byDay(current));
     ol.innerHTML = rows.map(function (r, index) {
       if (r.item) {
-        return '<li><span class="t">' + esc(r.item[0]) + '</span><span class="x"><span class="txt">' + esc(r.item[1]) +
+        return '<li><span class="t">' + esc(r.item[0]) + '</span><span class="x"><span class="txt">' + itemText(r.item) +
           (r.item[2] ? '<span class="pill">' + esc(r.item[2]) + '</span>' : '') + '</span>' +
           '<span class="reorder">' + [-1, 1].map(function (step) {
             var label = step < 0 ? '위로' : '아래로';
