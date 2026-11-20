@@ -191,7 +191,7 @@ section[id^="v-"] { display: grid; gap: 16px; }
     <div class="d-head" id="exp-head"><h2 id="exp-title" tabindex="-1" autofocus>차수 추가</h2><button type="button" class="d-x" id="exp-close" aria-label="닫기">×</button></div>
     <label class="s-field">금액<span class="s-amount"><span aria-hidden="true">¥</span><input id="f-amount" type="text" inputmode="numeric" autocomplete="off" aria-label="금액 (엔)"></span></label>
     <label class="s-field">내용<input id="f-title" type="text" maxlength="40" autocomplete="off" placeholder="예: 라멘"></label>
-    <fieldset class="s-field"><legend>낸 사람</legend><div class="chips" id="f-payer"></div></fieldset>
+    <fieldset class="s-field"><legend>낸 사람 · 룰렛이면 안 골라도 돼요</legend><div class="chips" id="f-payer"></div></fieldset>
     <fieldset class="s-field"><legend id="f-split-legend">참석자</legend><div class="chips split" id="f-split"></div></fieldset>
     <div class="s-field" id="f-rolls" hidden>룰렛 이력<ol class="rolls" id="f-roll-list"></ol></div>
     <div style="display: grid; gap: 10px">
@@ -299,7 +299,7 @@ function renderHome() {
   $('h-list').innerHTML = expenses.length
     ? expenses.map((e, i) => `<li><button type="button" class="s-row" data-id="${esc(e.id)}">` +
         `<span class="n">${i + 1}차</span><span class="t">${esc(e.title)}</span><span class="a">${yen(e.amount)}</span>` +
-        `<span class="m">${esc(e.payer)} 냄 · ` + (e.treat ? `<span class="treat">${esc(e.treat)}${iGa(e.treat)} 쏩니다!</span>`
+        `<span class="m">` + (e.treat && e.payer === e.treat ? '' : `${esc(e.payer)} 냄 · `) + (e.treat ? `<span class="treat">${esc(e.treat)}${iGa(e.treat)} 쏩니다!</span>`
           : `${attendees(e)} · 1인 ${yen(Math.floor(e.amount / e.split.length))}`) + rollNote(e) + '</span></button></li>').join('')
     : '<li class="s-empty">아직 차수가 없어요. 아래 ‘+ 차수 추가’로 시작해 주세요.</li>';
 }
@@ -379,7 +379,7 @@ function openExpense(item) {
   $('exp-title').textContent = `${n}차 ${item ? '수정' : '추가'}`;
   $('f-amount').value = item ? num(item.amount) : '';
   $('f-title').value = item ? item.title : '';
-  $('f-payer').innerHTML = MEMBERS.map((m) => chip('radio', 'payer', m, m, item ? item.payer === m : false)).join('');
+  $('f-payer').innerHTML = MEMBERS.map((m) => chip('radio', 'payer', m, m, item ? item.payer === m && item.payer !== item.treat : false)).join(''); // a winner who paid it themselves isn't carried into a re-roll
   const pool = item?.treat ? lastRoll(item)?.among ?? MEMBERS : item?.split; // a rolled 차수 reopens with the people it was drawn from
   $('f-split').innerHTML = MEMBERS.map((m) => chip('checkbox', 'split', m, m, item ? pool.includes(m) : true)).join('');
   $('f-split-legend').textContent = (item?.treat ? '룰렛 인원' : '참석자') + ' · 이름을 누르면 빠져요';
@@ -411,9 +411,9 @@ $('f-split').addEventListener('change', updatePer);
 async function saveExpense(roll) {
   // A plain save of a rolled 차수 keeps its result: there the chips only choose who is in the next spin.
   const split = !roll && editing?.treat ? [editing.treat] : picked('split');
-  const body = { title: $('f-title').value.trim(), amount: amountValue(), payer: picked('payer')[0] || '', split };
+  const body = { title: $('f-title').value.trim(), amount: amountValue(), payer: picked('payer')[0] || (!roll && editing?.treat ? editing.payer : ''), split };
   const problem = !body.amount ? '금액을 넣어 주세요.' : !body.title ? '내용을 넣어 주세요.'
-    : !body.payer ? '낸 사람을 골라 주세요.' : !body.split.length ? '참석자를 한 명 이상 골라 주세요.'
+    : !body.payer && !roll ? '낸 사람을 골라 주세요.' : !body.split.length ? '참석자를 한 명 이상 골라 주세요.'
     : roll && body.split.length < 2 ? '룰렛은 참석자가 두 명 이상일 때 돌릴 수 있어요.' : '';
   if (problem) { $('f-err').textContent = problem; return; }
   $('f-save').disabled = $('f-roll').disabled = true;
