@@ -62,7 +62,19 @@ button { font: inherit; color: inherit; }
   background: var(--soft); border-radius: 6px; padding: 4px 6px; color: var(--ink);
 }
 .ov-stay.none { background: transparent; color: var(--muted); border: 1px dashed var(--rule); }
-.ov-label { grid-row: 3; grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+.ov-label { grid-row: 3; grid-column: 1 / -1; font-size: 12px; color: var(--muted); position: sticky; left: 0; justify-self: start; } /* stays in view when the strip opens scrolled to a later day */
+/* 여행 완료: the cell greys out under a red seal; the svg fills the cell and scales its circle to the shorter side */
+.ov-day { position: relative; overflow: hidden; }
+.ov-day.done { background: color-mix(in srgb, var(--muted) 26%, var(--card)); border-color: var(--muted); }
+.ov-day.done[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); } /* selected ring without the day colour: a done day is grey all round */
+.ov-day.done > span { opacity: .4; }
+.ov-stamp { display: none; position: absolute; top: 3px; left: 3px; width: calc(100% - 6px); height: calc(100% - 6px); transform: rotate(-12deg); pointer-events: none; color: #e5303a; } /* one red for both themes: the dark --accent reads pink on a seal */
+.ov-day.done .ov-stamp { display: block; animation: stamp .25s ease-out; }
+.ov-stamp circle { fill: color-mix(in srgb, var(--card) 72%, transparent); stroke: currentColor; stroke-width: 5; } /* paper disc: veils the cell text and keeps the red readable on the grey */
+.ov-stamp circle + circle { fill: none; stroke-width: 1.5; }
+.ov-stamp text { fill: currentColor; font: 700 25px var(--font-body); text-anchor: middle; }
+@keyframes stamp { from { opacity: 0; transform: rotate(-12deg) scale(2); } }
+@media (prefers-reduced-motion: reduce) { .ov-day.done .ov-stamp { animation: none; } }
 /* ── day view ── */
 .d-body { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; align-items: start; }
 #d-main, #d-side { display: grid; gap: 14px; align-content: start; min-width: 0; }
@@ -105,7 +117,13 @@ svg.map { display: block; width: 100%; height: 320px; }
 .d-date { font-family: var(--font-mono); font-weight: 600; font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .d-date small { font-family: var(--font-body); font-size: 16px; font-weight: 500; color: var(--muted); margin-left: 6px; }
 .d-title { font-size: 20px; font-weight: 700; line-height: 1.35; margin: 4px 0 0; text-wrap: balance; }
+.d-acts { display: grid; gap: 6px; justify-items: end; flex-shrink: 0; }
 .nav { display: flex; gap: 6px; flex-shrink: 0; }
+/* pastel pair, same in both themes: green stamps the day done, red takes the stamp back; dark text of the same hue keeps about 6:1 contrast */
+.done-btn { min-height: 38px; padding: 0 14px; border: 0; border-radius: 10px; background: #b4e4c0; color: #14532d; font-size: 14px; font-weight: 700; white-space: nowrap; cursor: pointer; box-shadow: inset 0 0 0 1.5px #6cc487, 0 2px 8px rgb(76 175 110 / .35); }
+.done-btn[aria-pressed="true"] { background: #f7c1c6; color: #8f1420; box-shadow: inset 0 0 0 1.5px #e98a93, 0 2px 8px rgb(214 80 92 / .35); }
+.done-btn:hover:not(:disabled) { filter: brightness(.95); }
+.done-btn:disabled { opacity: .5; cursor: default; }
 .nav button {
   width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--rule); background: var(--card);
   cursor: pointer; font-size: 18px; line-height: 1; display: grid; place-items: center;

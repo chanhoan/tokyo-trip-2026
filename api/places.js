@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 const KEY = 'places';
 const ORDER_KEY = 'timeline-order';
+const DONE_KEY = 'done-days'; // set of days stamped 여행 완료
 // ponytail: flat cap instead of rate limiting; the URL is only shared within the group
 const MAX_PLACES = 300;
 
@@ -41,13 +42,18 @@ export function parseOrder(body) {
   return { day: body.day, ids: body.ids };
 }
 
+export function parseDone(body) {
+  if (!body || !Number.isInteger(body.day) || body.day < 5 || body.day > 12 || typeof body.done !== 'boolean') return null;
+  return { day: body.day, done: body.done };
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
-      const [all, orders] = await Promise.all([db().hgetall(KEY), db().hgetall(ORDER_KEY)]);
+      const [all, orders, done] = await Promise.all([db().hgetall(KEY), db().hgetall(ORDER_KEY), db().smembers(DONE_KEY)]);
       const places = Object.values(all ?? {}).sort((a, b) => a.at - b.at);
       res.setHeader('Cache-Control', 'no-store');
-      return res.status(200).json({ places, orders: orders ?? {} });
+      return res.status(200).json({ places, orders: orders ?? {}, done: (done ?? []).map(Number) });
     }
     if (req.method === 'POST') {
       const place = parsePlace(req.body);
@@ -63,13 +69,20 @@ export default async function handler(req, res) {
       await db().hset(ORDER_KEY, { [order.day]: order.ids });
       return res.status(200).json(order);
     }
+    if (req.method === 'PATCH') {
+      const mark = parseDone(req.body);
+      if (!mark) return res.status(400).json({ error: '날짜를 확인해 주세요.' });
+      // SADD/SREM are idempotent, so two people stamping at once cannot lose each other's day
+      await (mark.done ? db().sadd(DONE_KEY, mark.day) : db().srem(DONE_KEY, mark.day));
+      return res.status(200).json(mark);
+    }
     if (req.method === 'DELETE') {
       const id = String(req.query.id ?? '');
       if (!id) return res.status(400).json({ error: '지울 장소를 찾지 못했어요.' });
       await db().hdel(KEY, id);
       return res.status(204).end();
     }
-    res.setHeader('Allow', 'GET, POST, PUT, DELETE');
+    res.setHeader('Allow', 'GET, POST, PUT, PATCH, DELETE');
     return res.status(405).end();
   } catch (err) {
     console.error('places api failed', err);

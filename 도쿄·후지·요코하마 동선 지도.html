@@ -244,7 +244,10 @@
     b.dataset.day = day.d;
     b.style.setProperty('--c', color(day.d));
     b.style.gridColumn = String(i + 1);
-    b.innerHTML = '<span class="ov-date">12/' + day.d + '<small>' + day.dow + '</small></span><span class="ov-title">' + esc(day.short) + '</span>';
+    b.innerHTML = '<span class="ov-date">12/' + day.d + '<small>' + day.dow + '</small></span><span class="ov-title">' + esc(day.short) + '</span>' +
+      // svg so the seal scales with the cell: the circle fits the shorter side and the text shrinks with it
+      '<svg class="ov-stamp" viewBox="0 0 100 100" role="img" aria-label="여행 완료"><circle cx="50" cy="50" r="46"/><circle cx="50" cy="50" r="39"/>' +
+      '<text x="50" y="46">여행</text><text x="50" y="72">완료!</text></svg>';
     b.addEventListener('click', function () { go(day.d); });
     ov.appendChild(b);
   });
@@ -274,8 +277,9 @@
       '<div class="d-meta">' + (idx + 1) + '일차 / 8일</div>' +
       '<div class="d-date">12/' + day.d + '<small>' + day.dow + '요일</small></div>' +
       '<h2 class="d-title">' + esc(day.title) + '</h2></div>' +
-      '<div class="nav"><button id="prev" aria-label="이전 날"' + (idx === 0 ? ' disabled' : '') + '>‹</button>' +
-      '<button id="next" aria-label="다음 날"' + (idx === DAYS.length - 1 ? ' disabled' : '') + '>›</button></div></div>';
+      '<div class="d-acts"><div class="nav"><button id="prev" aria-label="이전 날"' + (idx === 0 ? ' disabled' : '') + '>‹</button>' +
+      '<button id="next" aria-label="다음 날"' + (idx === DAYS.length - 1 ? ' disabled' : '') + '>›</button></div>' +
+      '<button type="button" id="done-toggle" class="done-btn" aria-pressed="false" disabled>여행 완료!</button></div></div>';
     var head = html;
     html = '';
     var side = '';
@@ -859,6 +863,8 @@
   }
   var shared = [];
   var timelineOrders = {};
+  var doneDays = [];     // days stamped 여행 완료, shared by everyone
+  var autoStart = false; // no day in the URL: open on the first unstamped day once the stamps load
   var placesLoaded = false;
   var orderSaving = false;
   var orderVersion = 0;
@@ -871,12 +877,16 @@
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (d) {
         if (version !== orderVersion) return;
-        shared = d.places || []; timelineOrders = d.orders || {};
-        placesLoaded = true; loadFailed = false; renderTimeline();
+        shared = d.places || []; timelineOrders = d.orders || {}; doneDays = d.done || [];
+        placesLoaded = true; loadFailed = false;
+        var start = autoStart ? firstOpenDay(current) : current;
+        autoStart = false;
+        if (start !== current) { current = start; render(); showInStrip(); }
+        else { renderTimeline(); renderDone(); }
       })
       .catch(function (err) {
         if (version !== orderVersion) return;
-        console.error('load places failed', err); loadFailed = true; renderTimeline();
+        console.error('load places failed', err); loadFailed = true; renderTimeline(); renderDone();
       });
   }
   detail.addEventListener('submit', function (e) {
@@ -914,6 +924,7 @@
   });
   detail.addEventListener('click', function (e) {
     if (e.target.closest('.picked-clear')) { picked = null; showPicked(); return; }
+    if (e.target.closest('#done-toggle')) { toggleDone(); return; }
     var move = e.target.closest('.move-item');
     if (move) { moveFixedItem(move); return; }
     var del = e.target.closest('.del');
@@ -954,6 +965,46 @@
         if (focus) focus.focus({ preventScroll: true });
       }
     }
+  }
+  // ── 여행 완료 stamps: a stamped day greys out in the overview, and the page opens on the first day without one ──
+  function firstOpenDay(from) {
+    for (var i = DAYS.indexOf(byDay(from)); i < DAYS.length; i++) if (doneDays.indexOf(DAYS[i].d) < 0) return DAYS[i].d;
+    return from; // every remaining day is stamped
+  }
+  function renderDone() {
+    ov.querySelectorAll('.ov-day').forEach(function (b) { b.classList.toggle('done', doneDays.indexOf(Number(b.dataset.day)) >= 0); });
+    var button = document.getElementById('done-toggle');
+    if (!button) return;
+    var done = doneDays.indexOf(current) >= 0;
+    button.setAttribute('aria-pressed', String(done));
+    button.textContent = done ? '완료 취소' : '여행 완료!';
+    button.disabled = !placesLoaded || loadFailed;
+  }
+  async function toggleDone() {
+    var day = current;
+    var done = doneDays.indexOf(day) < 0;
+    var button = document.getElementById('done-toggle');
+    if (button) button.disabled = true;
+    orderVersion++; // drop a poll already in flight: it would bring back the old stamps
+    try {
+      var response = await fetch('/api/places', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ day: day, done: done })
+      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      doneDays = done ? doneDays.concat(day) : doneDays.filter(function (d) { return d !== day; });
+    } catch (err) {
+      console.error('save done failed', err);
+      alert('여행 완료를 저장하지 못했어요. 다시 시도해 주세요.');
+    } finally {
+      orderVersion++;
+      renderDone();
+    }
+  }
+  // Phones scroll the overview sideways: bring the day the page opened on to the strip's left edge.
+  function showInStrip() {
+    var b = ov.querySelector('.ov-day[data-day="' + current + '"]');
+    ov.parentNode.scrollLeft = b.offsetLeft - ov.offsetLeft;
   }
   setInterval(function () { if (!document.hidden) load(); }, POLL_MS);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) load(); });
@@ -1009,10 +1060,12 @@
     var idx = DAYS.indexOf(day);
     ov.querySelectorAll('.ov-day').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.day === String(current))); });
     renderDetail(day, idx);
+    renderDone();
     renderMap(day);
   }
 
   function go(d) {
+    autoStart = false;
     current = d;
     showAll = false;
     try { history.replaceState(null, '', '#d' + d); } catch (e) { /* hash is a convenience only */ }
@@ -1056,8 +1109,10 @@
     if (e.key === 'ArrowLeft' && idx > 0) go(DAYS[idx - 1].d);
   });
 
+  autoStart = !fromHash();
   current = fromHash() || today();
   render();
+  showInStrip();
   load();
 })();
 </script>

@@ -52,3 +52,35 @@ const route = stayContext.routeLink({ ...stay, address: '東京都 台東区 1-2
 assert.ok(route.includes(encodeURIComponent('東京都 台東区 1-2-3')));
 assert.match(route, /https:\/\/www.google.com\/maps\/dir\//);
 console.log('stay details and directions ok');
+// 여행 완료 stamps: where the page opens, and the shared toggle
+const doneContext = vm.createContext({
+  DAYS: [5, 6, 7].map(d => ({ d })), doneDays: [], current: 5, orderVersion: 0, placesLoaded: true, loadFailed: false,
+  ov: { querySelectorAll: () => [] }, document: { getElementById: () => null }, console: { error() {} },
+  alert: () => { doneContext.alerted = true; }
+});
+doneContext.byDay = d => doneContext.DAYS.find(x => x.d === d);
+vm.runInContext(html.slice(html.indexOf('  function firstOpenDay('), html.indexOf('  setInterval(function ()')), doneContext);
+assert.equal(doneContext.firstOpenDay(5), 5, 'nothing stamped: opens on today');
+doneContext.doneDays = [5, 6];
+assert.equal(doneContext.firstOpenDay(5), 7, 'opens on the first day without a stamp');
+doneContext.doneDays = [6];
+assert.equal(doneContext.firstOpenDay(5), 5, 'a stamp on a later day does not move the start');
+doneContext.doneDays = [5];
+assert.equal(doneContext.firstOpenDay(6), 6, 'days before today are not revisited');
+doneContext.doneDays = [5, 6, 7];
+assert.equal(doneContext.firstOpenDay(6), 6, 'every remaining day stamped: stays on today');
+doneContext.doneDays = [];
+let sent;
+doneContext.fetch = async (url, options) => { assert.equal(options.method, 'PATCH'); sent = JSON.parse(options.body); return { ok: true }; };
+await doneContext.toggleDone();
+assert.deepEqual(sent, { day: 5, done: true });
+assert.deepEqual(Array.from(doneContext.doneDays), [5]);
+assert.notEqual(doneContext.orderVersion, 0, 'a poll that started before the save cannot overwrite the new stamp');
+await doneContext.toggleDone();
+assert.deepEqual(sent, { day: 5, done: false }, 'pressing again takes the stamp back');
+assert.deepEqual(Array.from(doneContext.doneDays), []);
+doneContext.fetch = async () => ({ ok: false, status: 500 });
+await doneContext.toggleDone();
+assert.deepEqual(Array.from(doneContext.doneDays), [], 'failed save keeps the previous stamps');
+assert.equal(doneContext.alerted, true);
+console.log('done stamps ok');

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { parsePlace, parseOrder } from './api/places.js';
+import { parsePlace, parseOrder, parseDone } from './api/places.js';
 
 const ok = { day: 9, time: '13:30', name: ' 아카렌가 창고 ', placeId: 'ChIJ_abc-123', address: '요코하마', memo: '', by: '민수' };
 assert.deepEqual(parsePlace(ok), { day: 9, time: '13:30', name: '아카렌가 창고', placeId: 'ChIJ_abc-123', address: '요코하마', memo: '', by: '민수' });
@@ -25,3 +25,10 @@ for (const bad of [null, {}, { ...order, day: 13 }, { ...order, day: '9' },
   assert.equal(parseOrder(bad), null);
 }
 console.log('parseOrder ok');
+assert.deepEqual(parseDone({ day: 5, done: true }), { day: 5, done: true });
+assert.deepEqual(parseDone({ day: 12, done: false, extra: 1 }), { day: 12, done: false }, 'unknown fields are dropped');
+for (const bad of [null, {}, { day: 4, done: true }, { day: 13, done: true }, { day: '5', done: true },
+  { day: 5.5, done: true }, { day: 5 }, { day: 5, done: 'true' }, { day: 5, done: 1 }]) {
+  assert.equal(parseDone(bad), null);
+}
+console.log('parseDone ok');
