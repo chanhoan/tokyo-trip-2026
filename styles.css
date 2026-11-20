@@ -35,7 +35,9 @@ body { background: var(--paper); color: var(--ink); font-family: var(--font-body
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
-header { display: grid; gap: 4px; }
+header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.head-main { display: grid; gap: 4px; min-width: 0; }
+.settle-link { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap; min-height: 44px; padding: 0 16px; border: 1px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--ink); font-size: 14px; font-weight: 700; text-decoration: none; }
 .kicker { font-family: var(--font-mono); font-size: 13px; color: var(--muted); letter-spacing: .04em; }
 h1 { font-weight: 700; font-size: clamp(24px, 4vw, 34px); line-height: 1.25; margin: 0; text-wrap: balance; }
 h2 { font-weight: 700; font-size: 20px; margin: 0; text-wrap: balance; }
