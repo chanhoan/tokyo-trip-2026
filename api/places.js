@@ -64,6 +64,16 @@ export default async function handler(req, res) {
       await db().hset(KEY, { [item.id]: item });
       return res.status(201).json(item);
     }
+    if (req.method === 'PUT' && req.query.id) {
+      const id = String(req.query.id);
+      const place = parsePlace(req.body);
+      if (!place) return res.status(400).json({ error: '시간, 장소, 추가하는 사람을 확인해 주세요.' });
+      const old = await db().hget(KEY, id);
+      if (!old) return res.status(404).json({ error: '이미 지워진 일정이에요.' });
+      const item = { ...old, ...place }; // keeps id and at, so the row keeps its place in the saved order
+      await db().hset(KEY, { [id]: item });
+      return res.status(200).json(item);
+    }
     if (req.method === 'PUT') {
       const order = parseOrder(req.body);
       if (!order) return res.status(400).json({ error: '일정 순서를 확인해 주세요.' });
