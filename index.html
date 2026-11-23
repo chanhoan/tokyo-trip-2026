@@ -302,7 +302,7 @@
         (day.moveNote ? '<b>' + esc(day.moveNote) + '</b>' : '') + '</div>';
     }
     html += '<ol class="tl" id="tl"></ol>';
-    html += '<details class="add" id="add"><summary>+ 일정 추가</summary>' +
+    html += '<details class="add" id="add"><summary id="add-sum">+ 일정 추가</summary>' +
       '<form class="add-form" id="add-form">' +
       '<fieldset class="time-field"><legend>방문 시간 (24시간)</legend><div class="time-selects">' +
       '<select id="f-hour" aria-label="방문 시" required>' + timeOptions(24, '시') + '</select><span aria-hidden="true">:</span>' +
@@ -333,7 +333,10 @@
     try { document.getElementById('f-by').value = localStorage.getItem('nick') || ''; } catch (e) { /* name memory is optional; an unknown name leaves the select empty */ }
     setNowTime(document.getElementById('add-form'));
     picked = null;
+    editing = null;
     mountPlaceInput();
+    // closing the form while editing drops the edit, so the next open is a fresh add again
+    document.getElementById('add').addEventListener('toggle', function (e) { if (!e.target.open && editing) resetAddForm(document.getElementById('add-form')); });
     renderTimeline();
   }
   // ── timeline: fixed plan + places the group added, sorted by time ──
@@ -398,7 +401,7 @@
         '<a href="' + mapsUrl(p) + '" target="_blank" rel="noopener">' + esc(p.name) + '</a>' +
         (p.address ? '<span class="addr">' + esc(p.address) + '</span>' : '') +
         (p.memo ? '<span class="memo">' + esc(p.memo) + '</span>' : '') +
-        '<span class="by">' + esc(p.by) + ' 추가 <button class="del" type="button" data-id="' + esc(p.id) + '" data-name="' + esc(p.name) + '" aria-label="' + esc(p.name) + ' 지우기">지우기</button></span>' +
+        '<span class="by">' + esc(p.by) + ' 추가 <button class="edit" type="button" data-id="' + esc(p.id) + '" aria-label="' + esc(p.name) + ' 수정">수정</button><button class="del" type="button" data-id="' + esc(p.id) + '" data-name="' + esc(p.name) + '" aria-label="' + esc(p.name) + ' 지우기">지우기</button></span>' +
         '</span></li>';
     }).join('') + (loadFailed ? '<li class="tl-note">함께 추가한 일정을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.</li>' : '');
   }
@@ -883,6 +886,7 @@
     }
   }
   var shared = [];
+  var editing = null; // id of the added place loaded into the form, null while adding
   var timelineOrders = {};
   var doneDays = [];     // days stamped 여행 완료, shared by everyone
   var autoStart = false; // no day in the URL: open on the first unstamped day once the stamps load
@@ -929,25 +933,53 @@
     };
     try { localStorage.setItem('nick', body.by); } catch (err) { /* optional */ }
     btn.disabled = true;
-    fetch('/api/places', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    var verb = editing ? '수정하지' : '추가하지';
+    fetch(editing ? '/api/places?id=' + encodeURIComponent(editing) : '/api/places',
+      { method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then(function (r) {
-        if (!r.ok) return r.json().catch(function () { return {}; }).then(function (d) { throw new Error(d.error || '추가하지 못했어요.'); });
-        setNowTime(form);
-        form.querySelector('#f-memo').value = '';
-        picked = null;
-        showPicked();
-        mountPlaceInput();
+        if (!r.ok) return r.json().catch(function () { return {}; }).then(function (d) { throw new Error(d.error || verb + ' 못했어요.'); });
+        resetAddForm(form);
         document.getElementById('add').open = false;
         return load();
       })
-      .catch(function (err) { alert(err.message || '추가하지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.'); })
+      .catch(function (err) { alert(err.message || verb + ' 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.'); })
       .then(function () { btn.disabled = false; });
   });
+  function resetAddForm(form) {
+    editing = null;
+    setNowTime(form);
+    form.querySelector('#f-memo').value = '';
+    form.querySelector('button[type="submit"]').textContent = '12/' + current + ' 일정에 추가';
+    document.getElementById('add-sum').textContent = '+ 일정 추가';
+    picked = null;
+    showPicked();
+    mountPlaceInput();
+  }
+  // reuses the add form: fill it with the row, and the submit becomes a PUT
+  function startEdit(id) {
+    var p = shared.filter(function (x) { return x.id === id; })[0];
+    if (!p) return;
+    var form = document.getElementById('add-form');
+    editing = id;
+    form.querySelector('#f-hour').value = p.time.slice(0, 2);
+    form.querySelector('#f-minute').value = p.time.slice(3);
+    form.querySelector('#f-memo').value = p.memo || '';
+    form.querySelector('#f-by').value = p.by;
+    form.querySelector('button[type="submit"]').textContent = '수정 저장';
+    picked = { name: p.name, placeId: p.placeId || '', address: p.address || '' };
+    showPicked();
+    var add = document.getElementById('add');
+    document.getElementById('add-sum').textContent = '✎ 일정 수정 (닫으면 취소)';
+    add.open = true;
+    add.scrollIntoView({ block: 'nearest' });
+  }
   detail.addEventListener('click', function (e) {
     if (e.target.closest('.picked-clear')) { picked = null; showPicked(); return; }
     if (e.target.closest('#done-toggle')) { toggleDone(); return; }
     var move = e.target.closest('.move-item');
     if (move) { moveFixedItem(move); return; }
+    var edit = e.target.closest('.edit');
+    if (edit) { startEdit(edit.dataset.id); return; }
     var del = e.target.closest('.del');
     if (!del || !confirm('"' + del.dataset.name + '"을(를) 지울까요? 모두의 화면에서 지워져요.')) return;
     fetch('/api/places?id=' + encodeURIComponent(del.dataset.id), { method: 'DELETE' })

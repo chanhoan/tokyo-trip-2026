@@ -188,8 +188,8 @@ svg.map { display: block; width: 100%; height: 320px; }
 .tl .addr, .tl .by { font-size: 12px; color: var(--muted); }
 .tl .memo { font-size: 14px; }
 .tl .tl-note { display: block; font-size: 13px; color: var(--muted); padding-top: 8px; }
-.del { background: none; border: 0; padding: 0 0 0 6px; color: var(--muted); font-size: 12px; text-decoration: underline; cursor: pointer; }
-.del:hover { color: var(--accent); }
+.del, .edit { background: none; border: 0; padding: 0 0 0 6px; color: var(--muted); font-size: 12px; text-decoration: underline; cursor: pointer; }
+.del:hover, .edit:hover { color: var(--accent); }
 .add { border: 1px dashed var(--rule); border-radius: 10px; }
 .add summary { cursor: pointer; padding: 9px 12px; font-size: 14px; font-weight: 500; color: var(--muted); list-style: none; }
 .add summary::-webkit-details-marker { display: none; }
