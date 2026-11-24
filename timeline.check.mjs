@@ -88,3 +88,16 @@ console.log('done stamps ok');
 const crewSrc = html.match(/<dialog id="crew-dialog"[\s\S]*?<img src="([^"]+)"/)?.[1];
 assert.ok(crewSrc && existsSync(crewSrc), 'crew picture is in the repo under the name the page uses');
 console.log('crew picture ok');
+// Header badge: days left before the trip, the trip day during it, nothing once it is over
+const badgeContext = vm.createContext({ DAYS: Array.from({ length: 8 }, (_, i) => ({ d: 5 + i })) });
+vm.runInContext(html.slice(html.indexOf('  function tripBadge('), html.indexOf('  function setNowTime(')), badgeContext);
+const badge = (month, day, year = '2026') => badgeContext.tripBadge({ year, month, day }); // same zero-padded strings tokyoNow() gives
+assert.equal(badge('11', '24'), 'D-11');
+assert.equal(badge('10', '31'), 'D-35', 'counts across a month end');
+assert.equal(badge('12', '04'), 'D-1');
+assert.equal(badge('12', '05'), '1일차', 'departure day is day 1, not D-0');
+assert.equal(badge('12', '07'), '3일차');
+assert.equal(badge('12', '12'), '8일차');
+assert.equal(badge('12', '13'), '', 'hidden once the trip is over');
+assert.equal(badge('01', '02', '2027'), '');
+console.log('trip badge ok');

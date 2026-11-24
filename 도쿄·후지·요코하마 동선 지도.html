@@ -14,7 +14,7 @@
 <header>
   <div class="head-main">
     <div class="kicker">2026.12.5 – 12.12 · 7박 8일</div>
-    <div class="title-row"><h1>도쿄 여행</h1><button type="button" class="toggle crew-open" id="crew-open">참가자</button></div>
+    <div class="title-row"><h1>도쿄 여행</h1><span class="dday" id="dday" hidden></span><button type="button" class="toggle crew-open" id="crew-open">참가자</button></div>
   </div>
   <a class="settle-link" href="settle.html"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M16 15h2"/></svg>정산</a>
 </header>
@@ -1145,6 +1145,11 @@
     if (ymd > '2026-12-' + String(last).padStart(2, '0')) return last;
     return Number(n.day);
   }
+  // Header badge from today's Tokyo date: days left before the trip, the trip day during it, nothing once it is over.
+  function tripBadge(n) {
+    var day = (Date.UTC(n.year, n.month - 1, n.day) - Date.UTC(2026, 11, DAYS[0].d)) / 86400000;
+    return day < 0 ? 'D-' + -day : day < DAYS.length ? day + 1 + '일차' : '';
+  }
   function setNowTime(form) {
     var n = tokyoNow();
     form.querySelector('#f-hour').value = n.hour;
@@ -1188,6 +1193,13 @@
     if (e.key === 'ArrowLeft' && idx > 0) go(DAYS[idx - 1].d);
   });
 
+  function renderBadge() {
+    var el = document.getElementById('dday');
+    el.textContent = tripBadge(tokyoNow());
+    el.hidden = !el.textContent;
+  }
+  renderBadge();
+  document.addEventListener('visibilitychange', renderBadge); // a tab left open overnight catches up when it is looked at again
   autoStart = !fromHash();
   current = fromHash() || today();
   render();

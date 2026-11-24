@@ -44,6 +44,10 @@ h2 { font-weight: 700; font-size: 20px; margin: 0; text-wrap: balance; }
 .title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .title-row h1 { touch-action: manipulation; user-select: none; -webkit-user-select: none; } /* rapid taps (face rain) must not zoom or select */
 .crew-open { min-height: 36px; padding-inline: 14px; font-weight: 700; }
+.dday { font: 600 14px var(--font-mono); color: var(--accent); border: 1.5px solid var(--accent); border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+/* narrow phones (≤374px, e.g. 360px Galaxy): tighten the title row so the badge does not push 참가자 onto a second line */
+@media (max-width: 374px) { .title-row { gap: 6px; } .dday { font-size: 12px; padding: 2px 6px; } .crew-open { padding-inline: 10px; } }
+@media (max-width: 359px) { .dday { border: 0; padding: 0; } } /* Fold cover screens (344px): plain text still fits on the row */
 /* 참가자 picture: wide image at a readable height; phones scroll it sideways, starting on the left column of faces */
 .crew-dialog { max-width: calc(100vw - 24px); max-height: none; padding: 0; border: 0; border-radius: 12px; background: #000; overflow-x: auto; overscroll-behavior: contain; }
 .crew-dialog::backdrop { background: rgb(0 0 0 / .75); }
