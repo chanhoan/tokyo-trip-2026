@@ -154,6 +154,7 @@
     <p class="note">체크인 시간과 짐 보관 가능 여부는 호스트에게 확인하세요.</p>
   </div>
 </section>
+<p class="note">날씨 예보: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0)</p>
 </div>
 <dialog id="place-dialog" class="place-dialog" lang="ko" aria-labelledby="place-title">
   <!-- autofocus target: showModal() would otherwise focus the first button and draw the focus ring -->
@@ -258,7 +259,7 @@
     b.dataset.day = day.d;
     b.style.setProperty('--c', color(day.d));
     b.style.gridColumn = String(i + 1);
-    b.innerHTML = '<span class="ov-date">12/' + day.d + '<small>' + day.dow + '</small></span><span class="ov-title">' + esc(day.short) + '</span>' +
+    b.innerHTML = '<span class="ov-date">12/' + day.d + '<small>' + day.dow + '</small></span><span class="ov-title">' + esc(day.short) + '</span><span class="ov-wx"></span>' +
       // svg so the seal scales with the cell: the circle fits the shorter side and the text shrinks with it
       '<svg class="ov-stamp" viewBox="0 0 100 100" role="img" aria-label="여행 완료"><circle cx="50" cy="50" r="46"/><circle cx="50" cy="50" r="39"/>' +
       '<text x="50" y="46">여행</text><text x="50" y="72">완료!</text></svg>';
@@ -293,7 +294,8 @@
       '<h2 class="d-title">' + esc(day.title) + '</h2></div>' +
       '<div class="d-acts"><div class="nav"><button id="prev" aria-label="이전 날"' + (idx === 0 ? ' disabled' : '') + '>‹</button>' +
       '<button id="next" aria-label="다음 날"' + (idx === DAYS.length - 1 ? ' disabled' : '') + '>›</button></div>' +
-      '<button type="button" id="done-toggle" class="done-btn" aria-pressed="false" disabled>여행 완료!</button></div></div>';
+      '<button type="button" id="done-toggle" class="done-btn" aria-pressed="false" disabled>여행 완료!</button></div></div>' +
+      '<div class="wx" id="wx" role="group" aria-label="시간별 날씨" hidden></div>';
     var head = html;
     html = '';
     var side = '';
@@ -385,7 +387,7 @@
     var rows = timelineRows(byDay(current));
     ol.innerHTML = rows.map(function (r, index) {
       if (r.item) {
-        return '<li><span class="t">' + esc(r.item[0]) + '</span><span class="x"><span class="txt">' + itemText(r.item) +
+        return '<li><span class="t">' + esc(r.item[0]) + rowWeather(r.item[0]) + '</span><span class="x"><span class="txt">' + itemText(r.item) +
           (r.item[2] ? '<span class="pill">' + esc(r.item[2]) + '</span>' : '') + '</span>' +
           '<span class="reorder">' + [-1, 1].map(function (step) {
             var label = step < 0 ? '위로' : '아래로';
@@ -397,7 +399,7 @@
           }).join('') + '</span></span></li>';
       }
       var p = r.place;
-      return '<li class="added"><span class="t">' + esc(p.time) + '</span><span class="x">' +
+      return '<li class="added"><span class="t">' + esc(p.time) + rowWeather(p.time) + '</span><span class="x">' +
         '<a href="' + mapsUrl(p) + '" target="_blank" rel="noopener">' + esc(p.name) + '</a>' +
         (p.address ? '<span class="addr">' + esc(p.address) + '</span>' : '') +
         (p.memo ? '<span class="memo">' + esc(p.memo) + '</span>' : '') +
@@ -1114,6 +1116,7 @@
     ov.querySelectorAll('.ov-day').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.day === String(current))); });
     renderDetail(day, idx);
     renderDone();
+    renderWeather();
     renderMap(day);
   }
 
@@ -1156,6 +1159,131 @@
     form.querySelector('#f-minute').value = n.minute;
   }
 
+  // ── weather: Open-Meteo forecast (free, no key) for the four areas of the trip, shown for wherever the group is at that hour ──
+  var SPOTS = {
+    tokyo: { name: '도쿄', lat: 35.7148, lon: 139.7967 }, fuji: { name: '후지시', lat: 35.1613, lon: 138.6763 },
+    yokohama: { name: '요코하마', lat: 35.4437, lon: 139.6380 }, kawagoe: { name: '가와고에', lat: 35.9251, lon: 139.4858 }
+  };
+  // Where the group is from each hour on; null = not landed yet / flown out. Read off the itinerary.
+  // The hours for 12/9–12/11 are estimates (the plan has no clock times there): change them here.
+  var ROUTE = {
+    5: [[15, 'tokyo']], 6: [[0, 'tokyo']], 7: [[0, 'tokyo'], [12, 'fuji']], 8: [[0, 'fuji'], [15, 'tokyo']],
+    9: [[0, 'tokyo'], [12, 'yokohama']], 10: [[0, 'yokohama'], [13, 'tokyo']],
+    11: [[0, 'tokyo'], [10, 'kawagoe'], [18, 'tokyo']], 12: [[0, 'tokyo'], [16, null]]
+  };
+  function spotAt(d, hour) {
+    var spot = null;
+    ROUTE[d].forEach(function (s) { if (s[0] <= hour) spot = s[1]; });
+    return spot;
+  }
+  // an overview cell shows the area the group is in at noon (on the arrival day: the first one)
+  function daySpot(d) { return spotAt(d, 12) || ROUTE[d][0][1]; }
+  function ymdOf(d) { return '2026-12-' + String(d).padStart(2, '0'); }
+  // a 16-day forecast reaches a date 15 days ahead: the first day this trip day has one
+  function forecastFrom(d) {
+    var t = new Date(Date.UTC(2026, 11, d - 15));
+    return (t.getUTCMonth() + 1) + '/' + t.getUTCDate();
+  }
+  // WMO weather code → [icon, label]. Fog shares the cloud icon: its own emoji is a blurred square on Apple devices.
+  function wxLook(code, day) {
+    if (code <= 2) return [day === false ? '🌙' : code ? '🌤️' : '☀️', code ? '구름조금' : '맑음'];
+    if (code === 3) return ['☁️', '흐림'];
+    if (code <= 48) return ['☁️', '안개'];
+    if (code <= 57) return ['🌦️', '이슬비'];
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return ['❄️', '눈'];
+    if (code >= 95) return ['⛈️', '뇌우'];
+    return ['🌧️', '비'];
+  }
+  // The reply is rendered with innerHTML, so nothing but whole numbers leaves it: anything else from the service becomes null.
+  function wxNum(v) { return typeof v === 'number' && isFinite(v) ? Math.round(v) : null; }
+  // Open-Meteo sends parallel arrays; index them by date / hour. Entries without a temperature are dropped (never shown as 0°).
+  function indexForecast(loc) {
+    var out = { daily: {}, hourly: {} };
+    loc.daily.time.forEach(function (t, i) {
+      var min = wxNum(loc.daily.temperature_2m_min[i]), max = wxNum(loc.daily.temperature_2m_max[i]);
+      if (min != null && max != null) out.daily[t] = { code: wxNum(loc.daily.weather_code[i]), min: min, max: max };
+    });
+    loc.hourly.time.forEach(function (t, i) {
+      var temp = wxNum(loc.hourly.temperature_2m[i]);
+      if (temp != null) out.hourly[t] = { code: wxNum(loc.hourly.weather_code[i]), temp: temp, rain: wxNum(loc.hourly.precipitation_probability[i]), day: loc.hourly.is_day[i] === 1 };
+    });
+    return out;
+  }
+  // One hour of a trip day: the forecast of the area the group is in then, or null (no area, or no forecast yet).
+  function hourForecast(d, h, wx) {
+    var spot = spotAt(d, h);
+    var f = spot && wx[spot] && wx[spot].hourly[ymdOf(d) + 'T' + String(h).padStart(2, '0') + ':00'];
+    return f ? { hour: h, spot: spot, code: f.code, temp: f.temp, rain: f.rain, day: f.day } : null;
+  }
+  // the strip shows hours 6–23
+  function dayHours(d, wx) {
+    var rows = [];
+    for (var h = 6; h < 24; h++) { var f = hourForecast(d, h, wx); if (f) rows.push(f); }
+    return rows;
+  }
+  // A timeline row reads the nearest hour to its time (11:32 → 12시), or a label's slot (오후 → 14시); rows with no time of their own get none.
+  function rowForecast(d, label, wx) {
+    var m = minutesOf(label, -1);
+    return m < 0 ? null : hourForecast(d, Math.min(23, Math.round(m / 60)), wx);
+  }
+  var weather = null;        // { area: indexForecast() }, null until the first reply
+  var weatherAt = 0;
+  var weatherFailed = false; // no forecast at all: the overview cells give their weather line back
+  function loadWeather() {
+    var keys = Object.keys(SPOTS);
+    weatherAt = Date.now();
+    return fetch('https://api.open-meteo.com/v1/forecast?latitude=' + keys.map(function (k) { return SPOTS[k].lat; }).join(',') +
+      '&longitude=' + keys.map(function (k) { return SPOTS[k].lon; }).join(',') +
+      '&daily=weather_code,temperature_2m_max,temperature_2m_min&hourly=temperature_2m,weather_code,precipitation_probability,is_day' +
+      '&timezone=Asia%2FTokyo&forecast_days=16', { signal: AbortSignal.timeout(15000) })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (list) {
+        var next = {};
+        keys.forEach(function (k, i) { next[k] = indexForecast(list[i]); });
+        weather = next;
+        weatherFailed = false;
+      })
+      // weather is a nicety: the page works without it, and a forecast already on screen stays; try again the next time the tab is looked at
+      .catch(function (err) { console.error('weather failed', err); weatherFailed = !weather; weatherAt = 0; })
+      .then(function () { renderWeather(); renderTimeline(); });
+  }
+  // small forecast under a timeline row's time
+  function rowWeather(label) {
+    var f = weather && rowForecast(current, label, weather);
+    if (!f) return '';
+    var look = wxLook(f.code, f.day);
+    return '<span class="t-wx" title="' + f.hour + '시 ' + esc(SPOTS[f.spot].name) + ' · ' + look[1] + (f.rain == null ? '' : ' · 강수 ' + f.rain + '%') + '">' +
+      '<span class="wx-i">' + look[0] + '</span>' + f.temp + '°</span>';
+  }
+  function renderWeather() {
+    var n = tokyoNow(), todayYmd = n.year + '-' + n.month + '-' + n.day;
+    ov.classList.toggle('no-wx', weatherFailed);
+    ov.querySelectorAll('.ov-wx').forEach(function (el) {
+      var d = Number(el.parentNode.dataset.day);
+      var f = weather && weather[daySpot(d)].daily[ymdOf(d)];
+      el.innerHTML = f ? '<span><span class="wx-i">' + wxLook(f.code)[0] + '</span>' + wxLook(f.code)[1] + '</span><span class="ov-temp">' + f.min + '°/' + f.max + '°</span>'
+        : weather && ymdOf(d) >= todayYmd ? '<span class="wx-soon">예보 전</span><span class="ov-temp">' + forecastFrom(d) + '부터</span>' : ''; // days already gone stay blank
+    });
+    var box = document.getElementById('wx');
+    if (!box) return;
+    var rows = weather ? dayHours(current, weather) : [];
+    box.hidden = !rows.length;
+    if (!rows.length) return;
+    var bands = []; // runs of hours spent in the same area, as grid column ranges
+    rows.forEach(function (r, i) {
+      var last = bands[bands.length - 1];
+      if (last && last.spot === r.spot) last.to = i + 2; else bands.push({ spot: r.spot, from: i + 1, to: i + 2 });
+    });
+    box.innerHTML = '<div class="wx-grid" style="grid-template-columns: repeat(' + rows.length + ', minmax(38px, 1fr)); min-width: ' + rows.length * 40 + 'px">' +
+      bands.map(function (b) { return '<span class="wx-band" style="grid-column: ' + b.from + ' / ' + b.to + '">' + esc(SPOTS[b.spot].name) + '</span>'; }).join('') +
+      rows.map(function (r) {
+        return '<span class="wx-h" data-hour="' + r.hour + '"><span class="wx-t">' + r.hour + '시</span><span class="wx-i">' + wxLook(r.code, r.day)[0] + '</span>' +
+          '<b>' + r.temp + '°</b><em>' + (r.rain == null ? '' : r.rain + '%') + '</em></span>';
+      }).join('') + '</div>';
+    // today: start the strip at the current hour instead of 6시
+    var now = ymdOf(current) === todayYmd && box.querySelector('[data-hour="' + Number(n.hour) + '"]');
+    box.scrollLeft = now ? now.offsetLeft - box.firstChild.offsetLeft : 0;
+  }
   toggle.addEventListener('click', function () { showAll = !showAll; renderMap(byDay(current)); });
   // 참가자: the group picture; any click (picture, backdrop or ✕) closes it
   var crew = document.getElementById('crew-dialog');
@@ -1200,6 +1328,8 @@
   }
   renderBadge();
   document.addEventListener('visibilitychange', renderBadge); // a tab left open overnight catches up when it is looked at again
+  loadWeather();
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && Date.now() - weatherAt > 3600000) loadWeather(); }); // forecasts move slowly: once an hour at most
   autoStart = !fromHash();
   current = fromHash() || today();
   render();
