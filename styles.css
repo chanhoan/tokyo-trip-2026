@@ -40,6 +40,11 @@ header { display: flex; justify-content: space-between; align-items: flex-end; g
 .head-main { display: grid; gap: 4px; min-width: 0; }
 .settle-link { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap; min-height: 44px; padding: 0 16px; border: 1px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--ink); font-size: 14px; font-weight: 700; text-decoration: none; }
 .kicker { font-family: var(--font-mono); font-size: 13px; color: var(--muted); letter-spacing: .04em; }
+/* theme button: pinned to the header's top-right corner, above 정산, so it takes no room from the tight title row on phones */
+header { position: relative; }
+.theme-btn { position: absolute; top: -18px; right: 0; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+.theme-btn:hover { background: var(--soft); color: var(--ink); }
+.theme-btn svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 h1 { font-weight: 700; font-size: clamp(24px, 4vw, 34px); line-height: 1.25; margin: 0; text-wrap: balance; }
 h2 { font-weight: 700; font-size: 20px; margin: 0; text-wrap: balance; }
 .title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -287,6 +292,9 @@ body:has(.place-dialog[open]) { overflow: hidden; }
 .place-detail-actions button[aria-pressed="true"] { background: var(--ink); color: var(--card); }
 #place-menu-status { font-size: 13px; color: var(--muted); }
 #place-menu-photos gmp-advanced-place-details { display: block; width: 100%; color-scheme: light dark; }
+/* a theme picked with the button also applies to Google's place widgets, which otherwise follow the system */
+:root[data-theme="light"] #place-menu-photos gmp-advanced-place-details, :root[data-theme="light"] .place-details gmp-place-details { color-scheme: light; }
+:root[data-theme="dark"] #place-menu-photos gmp-advanced-place-details, :root[data-theme="dark"] .place-details gmp-place-details { color-scheme: dark; }
 .result-list { list-style: none; margin: 0; padding: 0; }
 .result-list li + li { border-top: 1px solid var(--rule); }
 .result-item { width: 100%; display: grid; grid-template-columns: 24px 64px 1fr; grid-auto-rows: min-content; column-gap: 10px; row-gap: 2px; align-content: start; padding: 12px 4px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }

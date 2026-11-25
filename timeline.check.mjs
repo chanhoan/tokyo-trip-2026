@@ -166,3 +166,16 @@ const late = wx.indexForecast({ daily: { time: [], weather_code: [], temperature
 assert.equal(wx.rowForecast(7, '오후', { fuji: late }).hour, 14, 'labels like 오후 use their slot hour');
 assert.equal(wx.rowForecast(7, '23:50', { fuji: late }).hour, 23, 'a late row stays on its own day');
 console.log('weather ok');
+// Theme button: flips what is shown; choosing what the system already uses goes back to following the system
+const themeContext = vm.createContext({});
+vm.runInContext(html.slice(html.indexOf('  function nextTheme('), html.indexOf('  function renderTheme(')), themeContext);
+assert.equal(themeContext.nextTheme(false, false), 'dark', 'light system, light shown');
+assert.equal(themeContext.nextTheme(true, false), '', 'light system, dark shown: back to following the system');
+assert.equal(themeContext.nextTheme(true, true), 'light', 'dark system, dark shown');
+assert.equal(themeContext.nextTheme(false, true), '', 'dark system, light shown: back to following the system');
+// Both pages apply the stored choice in <head>, before anything is painted, with the very same snippet
+const early = html.match(/<script>\(function \(\) \{ try \{ var t = localStorage\.getItem\('theme'\)[^\n]*<\/script>/)?.[0];
+assert.ok(early, 'index.html applies the stored theme in <head>');
+assert.ok(html.indexOf(early) < html.indexOf('<div class="wrap">'), 'before the body content');
+assert.ok(readFileSync('settle.html', 'utf8').includes(early), 'settle.html applies it the same way');
+console.log('theme ok');
