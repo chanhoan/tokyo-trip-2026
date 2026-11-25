@@ -44,6 +44,8 @@ assert.deepEqual(ids(), ['fixed:9:체크아웃', 'lunch', 'fixed:9:체크인', '
 console.log('timeline reorder ok');
 const voting = vm.createContext({
   member: '이영석', loadedVoteBy: '이영석', loadFailed: false, esc: String, voteSaving: false,
+  MEMBERS: ['이영석', '정찬환'], fallbackVoter: '', votePrompt: null,
+  currentVoter() { return voting.member || voting.fallbackVoter; },
 });
 vm.runInContext(html.slice(html.indexOf('  function voteButtons('), html.indexOf('  function renderTimeline(')), voting);
 const place = { id: 'lunch', name: '점심', votes: { like: 4, dislike: 1, mine: 'like' } };
@@ -54,6 +56,10 @@ voting.member = '정찬환';
 assert.doesNotMatch(voting.voteButtons(place), /aria-pressed="true"/, 'switching names hides the previous choice while loading');
 voting.member = '';
 assert.doesNotMatch(voting.voteButtons(place), / disabled/, 'the reaction is clickable before choosing a name');
+voting.votePrompt = { id: place.id, choice: 'like' };
+assert.match(voting.voteDetails(place), /data-voter="이영석"/, 'the active row offers its own name choices');
+assert.equal(voting.voteDetails({ id: 'another' }), '', 'other rows stay closed');
+voting.votePrompt = null;
 Object.assign(voting, {
   member: '정찬환', loadedVoteBy: '정찬환', voteSaving: false, loadRequest: 0,
   shared: [{ ...place, votes: { like: 4, dislike: 1, mine: null } }],

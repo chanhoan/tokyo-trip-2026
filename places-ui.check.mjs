@@ -387,16 +387,15 @@ assert.equal(html, readFileSync(new URL('./도쿄·후지·요코하마 동선 �
 
 const submitSource = html.slice(html.indexOf("  detail.addEventListener('submit'"), html.indexOf("  detail.addEventListener('click'"));
 const submitTarget = new Element();
-const fields = Object.fromEntries(['f-hour', 'f-minute', 'f-name', 'f-memo', 'submit'].map(id => [id, { value: '', disabled: false }]));
+const fields = Object.fromEntries(['f-hour', 'f-minute', 'f-name', 'f-memo', 'f-by', 'submit'].map(id => [id, { value: '', disabled: false }]));
 const form = { id: 'add-form', querySelector: selector => fields[selector === 'button[type="submit"]' ? 'submit' : selector.slice(1)] };
 let posted;
 let putUrl;
 let responseOk = true;
-let memberPrompt = false;
 const submitContext = vm.createContext({
   detail: submitTarget, current: 5, picked: null, editing: null, member: '이영석',
   shared: [{ id: 'abc-1', by: '한승남' }], document: { getElementById: node },
-  openMemberPicker() { memberPrompt = true; },
+  syncAddAuthor() {},
   localStorage: { setItem() {} }, showPicked() {}, mountPlaceInput() {}, load: async () => {}, alert() {},
   setNowTime(f) { f.querySelector('#f-hour').value = '12'; f.querySelector('#f-minute').value = '34'; },
   fetch: async (url, options) => { posted = JSON.parse(options.body); putUrl = options.method === 'PUT' ? url : null; return { ok: responseOk, json: async () => ({ error: '저장 실패' }) }; }
@@ -404,9 +403,10 @@ const submitContext = vm.createContext({
 vm.runInContext(submitSource, submitContext);
 submitContext.member = '';
 fields['f-name'].value = '센소지';
+fields['f-by'].value = '정상범';
 submitTarget.dispatch('submit', { target: form, preventDefault() {} });
-assert.equal(memberPrompt, true, 'adding without a name opens the header picker');
-assert.equal(posted, undefined, 'opening the name picker does not save an itinerary');
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(posted.by, '정상범', 'without a header name the form supplies its own author');
 submitContext.member = '이영석';
 for (const [hour, minute] of [['00', '00'], ['09', '05'], ['23', '59']]) {
   fields['f-hour'].value = hour;
