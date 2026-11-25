@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import handler, { parsePlace, parseOrder, parseDone, parseVote, voteSummary } from './api/places.js';
+import handler, { parsePlace, parseOrder, parseDone, dayOver, parseVote, voteSummary } from './api/places.js';
 import { MEMBERS } from './members.js';
 
 const ok = { day: 9, time: '13:30', name: ' 아카렌가 창고 ', placeId: 'ChIJ_abc-123', address: '요코하마', memo: '', by: '한승남' };
@@ -34,6 +34,10 @@ for (const bad of [null, {}, { day: 4, done: true }, { day: 13, done: true }, { 
   assert.equal(parseDone(bad), null);
 }
 console.log('parseDone ok');
+assert.equal(dayOver(5, new Date('2026-12-05T14:59:00Z')), false, 'the day itself (23:59 Tokyo) is not over');
+assert.equal(dayOver(5, new Date('2026-12-05T15:00:00Z')), true, 'over from 00:00 Tokyo the next day');
+assert.equal(dayOver(12, new Date('2026-11-25T00:00:00Z')), false);
+console.log('dayOver ok');
 
 const vote = { id: order.ids[1], by: ok.by, vote: 'like' };
 assert.deepEqual(parseVote({ ...vote, extra: 'ignored' }), vote);
@@ -88,6 +92,15 @@ async function request(method, query = {}, body) {
   return res;
 }
 const [a, b] = MEMBERS;
+if (!dayOver(12)) { // the trap only exists before the trip is over
+  const warn = console.warn; let logged = '';
+  console.warn = (...args) => { logged = args.join(' '); };
+  const early = await request('PATCH', {}, { day: 12, done: true, by: a });
+  console.warn = warn;
+  assert.equal(early.code, 403, 'a day that is not over cannot be stamped');
+  assert.match(logged, /[TERROR]/, 'and the attempt is logged');
+  console.log('early stamp trap ok');
+}
 const cast = (by, vote) => request('PATCH', { vote: '1' }, { id, by, vote });
 const readVotes = async query => (await request('GET', query)).data.places[0].votes;
 assert.deepEqual(await readVotes(), { like: 0, dislike: 0, mine: null });

@@ -219,6 +219,15 @@
   <!-- lazy: fetched only once the dialog is opened -->
   <img src="crew.jpg" alt="12월 일본 여행 참가자, 광주 5반 밴픽 화면" width="2400" height="1401" loading="lazy">
 </dialog>
+<!-- easter egg for anyone stamping 여행 완료 before the day is over; the server logs the attempt -->
+<dialog id="terror-dialog" class="terror-dialog" lang="ko" aria-labelledby="terror-title">
+  <form method="dialog">
+    <div class="terror-siren" aria-hidden="true">🚨</div>
+    <h2 id="terror-title">테러하지 말라고 했지</h2>
+    <p>IP 저장함<br>뒤졌어</p>
+    <button type="submit" autofocus>잘못했어요</button>
+  </form>
+</dialog>
 <script>
 (function () {
   var MEMBERS = ['정찬환', '정상범', '한승남', '이영석', '하지원']; // keep in sync with members.js (settle.check.mjs)
@@ -1447,7 +1456,7 @@
     var done = doneDays.indexOf(current) >= 0;
     button.setAttribute('aria-pressed', String(done));
     button.textContent = done ? '완료 취소' : '여행 완료!';
-    button.disabled = !placesLoaded || loadFailed;
+    button.disabled = !placesLoaded || loadFailed; // left pressable on purpose: the server turns early stamps into a trap
   }
   async function toggleDone() {
     var day = current;
@@ -1458,8 +1467,9 @@
     try {
       var response = await fetch('/api/places', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ day: day, done: done })
+        body: JSON.stringify({ day: day, done: done, by: currentVoter() })
       });
+      if (response.status === 403) return document.getElementById('terror-dialog').showModal(); // stamped a day that is not over: logged on the server
       if (!response.ok) throw new Error('HTTP ' + response.status);
       doneDays = done ? doneDays.concat(day) : doneDays.filter(function (d) { return d !== day; });
     } catch (err) {

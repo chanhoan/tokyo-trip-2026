@@ -115,6 +115,7 @@ const doneContext = vm.createContext({
   alert: () => { doneContext.alerted = true; }
 });
 doneContext.byDay = d => doneContext.DAYS.find(x => x.d === d);
+doneContext.currentVoter = () => '찬환';
 vm.runInContext(html.slice(html.indexOf('  function firstOpenDay('), html.indexOf('  setInterval(function ()')), doneContext);
 assert.equal(doneContext.firstOpenDay(5), 5, 'nothing stamped: opens on today');
 doneContext.doneDays = [5, 6];
@@ -129,16 +130,24 @@ doneContext.doneDays = [];
 let sent;
 doneContext.fetch = async (url, options) => { assert.equal(options.method, 'PATCH'); sent = JSON.parse(options.body); return { ok: true }; };
 await doneContext.toggleDone();
-assert.deepEqual(sent, { day: 5, done: true });
+assert.deepEqual(sent, { day: 5, done: true, by: '찬환' });
 assert.deepEqual(Array.from(doneContext.doneDays), [5]);
 assert.notEqual(doneContext.orderVersion, 0, 'a poll that started before the save cannot overwrite the new stamp');
 await doneContext.toggleDone();
-assert.deepEqual(sent, { day: 5, done: false }, 'pressing again takes the stamp back');
+assert.deepEqual(sent, { day: 5, done: false, by: '찬환' }, 'pressing again takes the stamp back');
 assert.deepEqual(Array.from(doneContext.doneDays), []);
 doneContext.fetch = async () => ({ ok: false, status: 500 });
 await doneContext.toggleDone();
 assert.deepEqual(Array.from(doneContext.doneDays), [], 'failed save keeps the previous stamps');
 assert.equal(doneContext.alerted, true);
+let warned = false;
+doneContext.alerted = false;
+doneContext.document = { getElementById: id => (id === 'terror-dialog' ? { showModal() { warned = true; } } : null) };
+doneContext.fetch = async () => ({ ok: false, status: 403 });
+await doneContext.toggleDone();
+assert.equal(warned, true, 'an early stamp opens the easter egg popup');
+assert.equal(doneContext.alerted, false, 'instead of the save error');
+assert.deepEqual(Array.from(doneContext.doneDays), [], 'and stamps nothing');
 console.log('done stamps ok');
 // 참가자 picture: the file the dialog points at has to ship with the page
 const crewSrc = html.match(/<dialog id="crew-dialog"[\s\S]*?<img src="([^"]+)"/)?.[1];

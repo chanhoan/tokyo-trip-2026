@@ -49,6 +49,12 @@ export function parseDone(body) {
   return { day: body.day, done: body.done };
 }
 
+// A day counts as over only once Tokyo has moved on to the next date (the day itself is still too early).
+export function dayOver(day, now = new Date()) {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(now); // YYYY-MM-DD
+  return today > '2026-12-' + String(day).padStart(2, '0');
+}
+
 export function parseVote(body) {
   if (!body || typeof body.id !== 'string' || !/^[a-f0-9-]{36}$/.test(body.id) ||
     !MEMBERS.includes(body.by) || !['like', 'dislike', null].includes(body.vote)) return null;
@@ -88,7 +94,7 @@ export default async function handler(req, res) {
       const places = Object.values(all ?? {}).sort((a, b) => a.at - b.at)
         .map(place => ({ ...place, votes: voteSummary(votes?.[place.id], req.query?.voter) }));
       res.setHeader('Cache-Control', 'no-store');
-      return res.status(200).json({ places, orders: orders ?? {}, done: (done ?? []).map(Number) });
+      return res.status(200).json({ places, orders: orders ?? {}, done: (done ?? []).map(Number).filter(day => dayOver(day)) }); // stamps on days not over yet are ignored
     }
     if (req.method === 'POST') {
       const place = parsePlace(req.body);
@@ -124,6 +130,13 @@ export default async function handler(req, res) {
     if (req.method === 'PATCH') {
       const mark = parseDone(req.body);
       if (!mark) return res.status(400).json({ error: '날짜를 확인해 주세요.' });
+      if (mark.done && !dayOver(mark.day)) {
+        console.warn('[TERROR] early 여행 완료', JSON.stringify({
+          day: mark.day, by: String(req.body.by ?? '').slice(0, 40),
+          ip: req.headers?.['x-forwarded-for'] ?? req.headers?.['x-real-ip'] ?? null, ua: req.headers?.['user-agent'] ?? null,
+        }));
+        return res.status(403).json({ error: '그날이 지나야 여행 완료를 찍을 수 있어요.' });
+      }
       // SADD/SREM are idempotent, so two people stamping at once cannot lose each other's day
       await (mark.done ? db().sadd(DONE_KEY, mark.day) : db().srem(DONE_KEY, mark.day));
       return res.status(200).json(mark);
