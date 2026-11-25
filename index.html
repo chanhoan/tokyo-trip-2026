@@ -334,6 +334,8 @@
       '<div id="f-place" class="place-slot"></div>' +
       '<div id="f-picked" class="picked" hidden></div>' +
       '<input id="f-memo" class="full" placeholder="메모 (선택)" maxlength="200" aria-label="메모">' +
+      '<select id="f-by" class="full" required aria-label="추가하는 사람"><option value="">누가 추가하나요?</option>' +
+      MEMBERS.map(function (m) { return '<option>' + esc(m) + '</option>'; }).join('') + '</select>' +
       '<button type="submit">12/' + day.d + ' 일정에 추가</button></form></details>';
     side += '<div class="boxes">';
     if (day.book) {
@@ -355,6 +357,8 @@
     setNowTime(document.getElementById('add-form'));
     picked = null;
     editing = null;
+    try { document.getElementById('f-by').value = localStorage.getItem('nick') || ''; } catch (err) { /* optional */ }
+    syncAddAuthor();
     mountPlaceInput();
     // closing the form while editing drops the edit, so the next open is a fresh add again
     document.getElementById('add').addEventListener('toggle', function (e) { if (!e.target.open && editing) resetAddForm(document.getElementById('add-form')); });
@@ -403,16 +407,30 @@
   function voteButtons(place) {
     var THUMB_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v12" class="cuff"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>';
     var counts = place.votes || { like: 0, dislike: 0, mine: null };
-    var showChoice = member && loadedVoteBy === member;
+    var voter = currentVoter();
+    var showChoice = voter && loadedVoteBy === voter;
     return '<span class="votes" role="group" aria-label="' + esc(place.name) + ' 투표">' +
       [['like', '좋아요'], ['dislike', '싫어요']].map(function (choice) {
         return '<button type="button" class="vote" data-id="' + esc(place.id) + '" data-vote="' + choice[0] +
           '" data-vote-focus="' + esc(place.id) + ':' + choice[0] +
           '" aria-label="' + choice[1] + ' ' + Number(counts[choice[0]]) + '표"' +
           (loadFailed ? ' disabled' : '') +
+          (!voter ? ' aria-expanded="' + Boolean(votePrompt?.id === place.id && votePrompt.choice === choice[0]) + '"' : '') +
           ' aria-pressed="' + (showChoice && counts.mine === choice[0] ? 'true' : 'false') + '">' +
           THUMB_SVG + '<span class="count">' + (Number(counts[choice[0]]) || '') + '</span></button>';
       }).join('') + '</span>';
+  }
+  function voteDetails(place) {
+    if (votePrompt?.id !== place.id || currentVoter()) return '';
+    var id = esc(place.id);
+    var label = votePrompt.choice === 'like' ? '좋아요' : '싫어요';
+    var prompt = '누구 이름으로 ' + label + '를 남길까요?';
+    return '<span class="vote-picker" role="group" aria-label="' + prompt + '">' +
+      '<span class="vote-picker-title">' + prompt + '</span>' +
+      '<button type="button" class="vote-close" aria-label="닫기" data-vote-focus="' + id + ':close">×</button>' +
+      '<span class="vote-names">' + MEMBERS.map(function (name, i) {
+        return '<button type="button" data-voter="' + esc(name) + '" data-vote-focus="' + id + ':name:' + i + '">' + esc(name) + '</button>';
+      }).join('') + '</span></span>';
   }
   function renderTimeline(focusKey) {
     var ol = document.getElementById('tl');
@@ -438,7 +456,7 @@
         (p.address ? '<span class="addr">' + esc(p.address) + '</span>' : '') +
         (p.memo ? '<span class="memo">' + esc(p.memo) + '</span>' : '') +
         '<span class="by">' + esc(p.by) + ' 추가 <button class="edit" type="button" data-id="' + esc(p.id) + '" aria-label="' + esc(p.name) + ' 수정">수정</button><button class="del" type="button" data-id="' + esc(p.id) + '" data-name="' + esc(p.name) + '" aria-label="' + esc(p.name) + ' 지우기">지우기</button></span>' +
-        voteButtons(p) + '</span></li>';
+        voteButtons(p) + voteDetails(p) + '</span></li>';
     }).join('') + (loadFailed ? '<li class="tl-note">함께 추가한 일정을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.</li>' : '');
     if (focus) {
       var next = Array.from(ol.querySelectorAll('[data-vote-focus]')).find(function (button) {
@@ -1208,14 +1226,19 @@
   var orderVersion = 0;
   var loadFailed = false;
   var member = '';
+  var fallbackVoter = '';
   try {
     var savedMember = localStorage.getItem('tripMember');
     if (MEMBERS.includes(savedMember)) member = savedMember;
+    var savedVoter = localStorage.getItem('voteBy');
+    if (MEMBERS.includes(savedVoter)) fallbackVoter = savedVoter;
   } catch (err) { /* name memory is optional */ }
   var loadedVoteBy = '';
+  var votePrompt = null;
   var voteSaving = false;
   var loadRequest = 0;
   var POLL_MS = 20000;
+  function currentVoter() { return member || fallbackVoter; }
   async function fetchPlaces(voter) {
     var response = await fetch('/api/places' + (voter ? '?voter=' + encodeURIComponent(voter) : ''), { cache: 'no-store' });
     if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -1225,10 +1248,10 @@
     if (orderSaving || voteSaving) return Promise.resolve();
     var version = orderVersion;
     var request = ++loadRequest;
-    var voter = member;
+    var voter = currentVoter();
     return fetchPlaces(voter)
       .then(function (d) {
-        if (version !== orderVersion || request !== loadRequest || voter !== member) return;
+        if (version !== orderVersion || request !== loadRequest || voter !== currentVoter()) return;
         shared = d.places || []; timelineOrders = d.orders || {}; doneDays = d.done || [];
         loadedVoteBy = voter;
         placesLoaded = true; loadFailed = false;
@@ -1238,7 +1261,7 @@
         else { renderTimeline(); renderDone(); }
       })
       .catch(function (err) {
-        if (version !== orderVersion || request !== loadRequest || voter !== member) return;
+        if (version !== orderVersion || request !== loadRequest || voter !== currentVoter()) return;
         console.error('load places failed', err); loadFailed = true; renderTimeline(); renderDone();
       });
   }
@@ -1250,10 +1273,6 @@
     var typed = form.querySelector('#f-name');
     var place = picked || (typed && typed.value.trim() ? { name: typed.value.trim(), placeId: '', address: '' } : null);
     if (!place) { alert('장소를 검색해서 골라 주세요.'); return; }
-    if (!member) {
-      openMemberPicker(btn);
-      return;
-    }
     var original = editing && shared.find(function (p) { return p.id === editing; });
     if (editing && !original) { alert('이미 지워진 일정이에요.'); return; }
     var body = {
@@ -1263,7 +1282,7 @@
       placeId: place.placeId,
       address: place.address,
       memo: form.querySelector('#f-memo').value.trim(),
-      by: original ? original.by : member
+      by: original ? original.by : member || form.querySelector('#f-by').value
     };
     btn.disabled = true;
     var verb = editing ? '수정하지' : '추가하지';
@@ -1271,6 +1290,9 @@
       { method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then(function (r) {
         if (!r.ok) return r.json().catch(function () { return {}; }).then(function (d) { throw new Error(d.error || verb + ' 못했어요.'); });
+        if (!original && !member) {
+          try { localStorage.setItem('nick', body.by); } catch (err) { /* optional */ }
+        }
         resetAddForm(form);
         document.getElementById('add').open = false;
         return load();
@@ -1278,8 +1300,13 @@
       .catch(function (err) { alert(err.message || verb + ' 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.'); })
       .then(function () { btn.disabled = false; });
   });
+  function syncAddAuthor() {
+    var author = document.getElementById('f-by');
+    if (author) author.disabled = author.hidden = Boolean(member || editing);
+  }
   function resetAddForm(form) {
     editing = null;
+    syncAddAuthor();
     setNowTime(form);
     form.querySelector('#f-memo').value = '';
     form.querySelector('button[type="submit"]').textContent = '12/' + current + ' 일정에 추가';
@@ -1294,6 +1321,7 @@
     if (!p) return;
     var form = document.getElementById('add-form');
     editing = id;
+    syncAddAuthor();
     form.querySelector('#f-hour').value = p.time.slice(0, 2);
     form.querySelector('#f-minute').value = p.time.slice(3);
     form.querySelector('#f-memo').value = p.memo || '';
@@ -1305,9 +1333,8 @@
     add.open = true;
     add.scrollIntoView({ block: 'nearest' });
   }
-  async function castVote(id, choice) {
-    if (voteSaving || !member) return;
-    var by = member;
+  async function castVote(id, choice, by = currentVoter()) {
+    if (voteSaving || !by) return;
     voteSaving = true;
     loadRequest++;
     var focus;
@@ -1324,6 +1351,11 @@
       var votes = await response.json();
       shared = places.map(function (p) { return p.id === id ? Object.assign({}, p, { votes: votes }) : p; });
       loadedVoteBy = by;
+      if (!member && fallbackVoter !== by) {
+        fallbackVoter = by;
+        try { localStorage.setItem('voteBy', by); } catch (err) { /* optional */ }
+      }
+      votePrompt = null;
       focus = id + ':' + choice;
     } catch (err) {
       console.error('save vote failed', err);
@@ -1341,9 +1373,25 @@
     if (move) { moveFixedItem(move); return; }
     var reaction = e.target.closest('.vote');
     if (reaction) {
+      if (voteSaving) return;
       var id = reaction.dataset.id, choice = reaction.dataset.vote;
-      if (member) castVote(id, choice);
-      else openMemberPicker(reaction);
+      if (currentVoter()) castVote(id, choice);
+      else {
+        var close = votePrompt?.id === id && votePrompt.choice === choice;
+        votePrompt = close ? null : { id: id, choice: choice };
+        renderTimeline(id + ':' + (close ? choice : 'name:0'));
+      }
+      return;
+    }
+    var voter = e.target.closest('[data-voter]');
+    if (voter && votePrompt) {
+      castVote(votePrompt.id, votePrompt.choice, voter.dataset.voter);
+      return;
+    }
+    if (votePrompt && e.target.closest('.vote-close')) {
+      var focus = votePrompt.id + ':' + votePrompt.choice;
+      votePrompt = null;
+      renderTimeline(focus);
       return;
     }
     var edit = e.target.closest('.edit');
@@ -1487,6 +1535,7 @@
   }
 
   function go(d) {
+    votePrompt = null;
     autoStart = false;
     current = d;
     showAll = false;
@@ -1659,7 +1708,6 @@
   var memberLabel = document.getElementById('member-label');
   var memberPicker = document.getElementById('member-picker');
   var memberHint = document.getElementById('member-hint');
-  var memberTrigger = null;
   function renderMember() {
     memberLabel.textContent = member || '이름 선택';
     memberOpen.setAttribute('aria-label', member ? '참가자 이름 변경, 현재 ' + member : '참가자 이름 선택');
@@ -1670,8 +1718,7 @@
       button.setAttribute('aria-pressed', String(button.dataset.member === member));
     });
   }
-  function openMemberPicker(trigger) {
-    memberTrigger = trigger;
+  function openMemberPicker() {
     memberPicker.hidden = false;
     memberOpen.setAttribute('aria-expanded', 'true');
     (memberPicker.querySelector('[aria-pressed="true"]') || memberPicker.firstElementChild).focus();
@@ -1679,16 +1726,14 @@
   function closeMemberPicker() {
     memberPicker.hidden = true;
     memberOpen.setAttribute('aria-expanded', 'false');
-    var trigger = memberTrigger?.isConnected ? memberTrigger : memberOpen;
-    trigger.focus();
-    memberTrigger = null;
+    memberOpen.focus();
   }
   memberPicker.innerHTML = MEMBERS.map(function (name) {
     return '<button type="button" data-member="' + esc(name) + '">' + esc(name) + '</button>';
   }).join('');
   renderMember();
   memberOpen.addEventListener('click', function () {
-    if (memberPicker.hidden) openMemberPicker(memberOpen);
+    if (memberPicker.hidden) openMemberPicker();
     else closeMemberPicker();
   });
   memberPicker.addEventListener('keydown', function (e) {
@@ -1698,9 +1743,11 @@
     var name = e.target.closest('[data-member]')?.dataset.member;
     if (!MEMBERS.includes(name)) return;
     member = name;
+    votePrompt = null;
     try { localStorage.setItem('tripMember', member); } catch (err) { /* name memory is optional */ }
     closeMemberPicker();
     renderMember();
+    syncAddAuthor();
     renderTimeline();
     load();
   });

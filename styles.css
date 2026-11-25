@@ -263,6 +263,12 @@ svg.map { display: block; width: 100%; height: 320px; }
 .tl .tl-note { display: block; font-size: 13px; color: var(--muted); padding-top: 8px; }
 .del, .edit { background: none; border: 0; padding: 0 0 0 6px; color: var(--muted); font-size: 12px; text-decoration: underline; cursor: pointer; }
 .del:hover, .edit:hover { color: var(--accent); }
+.tl li.added .x > .vote-picker { grid-column: 1 / -1; grid-row: 5; }
+.vote-picker { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: 2px 8px; margin-top: 10px; padding: 0 10px 10px; border-radius: 10px; background: var(--soft); }
+.vote-picker-title { font-size: 13px; font-weight: 600; }
+.vote-close { width: 44px; min-height: 44px; border: 0; border-radius: 8px; background: none; color: var(--muted); font-size: 24px; cursor: pointer; }
+.vote-names { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.vote-names button { min-height: 44px; padding-inline: 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); font-size: 13px; cursor: pointer; }
 /* YouTube-style thumbs in a soft pill at the row's bottom-right: outline → filled when chosen */
 .votes { grid-column: 2; grid-row: 1 / span 4; align-self: end; margin-bottom: -4px; display: inline-flex; align-items: center; border-radius: 999px; background: var(--soft); }
 .vote {
