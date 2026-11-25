@@ -18,6 +18,10 @@
   </div>
   <a class="settle-link" href="settle.html"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M16 15h2"/></svg>정산</a>
 </header>
+<section class="nearby-bar" aria-label="지금 근처 빠르게 찾기">
+  <span class="nearby-lbl">지금 근처</span>
+  <div class="nearby-scroll"><div class="nearby-chips" id="nearby-chips"></div></div>
+</section>
 <section aria-labelledby="h-ov">
   <div class="sec-head">
     <h2 id="h-ov">한눈에 보기</h2>
@@ -166,6 +170,9 @@
     <input id="place-query" type="search" placeholder="예: 아사쿠사 라멘, 시부야 카페" aria-label="장소 또는 지역 검색" maxlength="200" required>
     <button id="place-run" type="submit">검색</button>
   </form>
+  <div id="place-nearby" class="place-nearby" hidden>
+    <div id="place-nearby-chips" class="nearby-chips" role="group" aria-label="주변 카테고리"></div>
+  </div>
   <section id="place-sheet" class="place-sheet" data-size="peek" aria-label="검색 결과">
     <button type="button" id="place-handle" class="place-handle" aria-label="목록 크게 보기"><span></span></button>
     <p id="place-status" class="place-status" role="status" aria-live="polite">장소를 검색하면 지도와 상세 정보가 나와요.</p>
@@ -186,6 +193,7 @@
     <div class="place-dialog-foot">
       <a id="place-external" target="_blank" rel="noopener" hidden aria-label="Google Maps에서 더 보기">↗</a>
       <button id="place-manual" class="place-manual" type="button" hidden>장소 이름 직접 입력</button>
+      <a id="place-walk" class="place-walk" target="_blank" rel="noopener" hidden>도보 길찾기 ↗</a>
       <button id="place-choose" type="button" disabled>이 장소 선택</button>
     </div>
   </section>
@@ -428,6 +436,116 @@
   var nextPage = null;    // request body for the next 20 results, null when Google has no more
   var resultList = null;
   var moreButton = null;
+  // ── nearby one-tap radar: reuses the map dialog in 'nearby' mode with distance sort + walking directions ──
+  var NEARBY = [
+    { id: 'cvs',     icon: '🏪', label: '편의점',     query: 'コンビニ',       openNow: false },
+    { id: 'cafe',    icon: '☕', label: '카페',       query: 'カフェ',         openNow: true },
+    { id: 'food',    icon: '🍜', label: '음식점',     query: '飲食店',         openNow: true },
+    { id: 'izakaya', icon: '🍺', label: '이자카야',   query: '居酒屋',         openNow: true },
+    { id: 'locker',  icon: '🧳', label: '코인로커',   query: 'コインロッカー', openNow: false },
+    { id: 'drug',    icon: '💊', label: '드럭스토어', query: 'ドラッグストア', openNow: false }
+  ];
+  var DAY_CENTERS = {
+    5:  { name: '아사쿠사', ja: '浅草',   lat: 35.7148, lng: 139.7967 },
+    6:  { name: '아키하바라', ja: '秋葉原', lat: 35.6984, lng: 139.7731 },
+    7:  { name: '후지시',   ja: '富士市', lat: 35.1613, lng: 138.6763 },
+    8:  { name: '후지시',   ja: '富士市', lat: 35.1613, lng: 138.6763 },
+    9:  { name: '요코하마', ja: '横浜',   lat: 35.4437, lng: 139.6380 },
+    10: { name: '시부야',   ja: '渋谷',   lat: 35.6580, lng: 139.7016 },
+    11: { name: '가와고에', ja: '川越',   lat: 35.9251, lng: 139.4858 },
+    12: { name: '시부야',   ja: '渋谷',   lat: 35.6580, lng: 139.7016 }
+  };
+  var dialogMode = 'pick'; // 'pick' (add to itinerary) | 'nearby' (one-tap radar)
+  var activeNearby = null;
+  var nearbyOpenOnly = false;
+  var nearbyFrom = null;
+  var nearbyButtons = {};
+  var openOnlyBtn = null;
+  function walkingUrl(p) {
+    return 'https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=' + encodeURIComponent(p.name) +
+      (p.placeId ? '&destination_place_id=' + encodeURIComponent(p.placeId) : '');
+  }
+  function nearbyFallbackUrl(cat, origin) {
+    var q = (cat && cat.query) || '';
+    if (origin && !origin.live && origin.ja) q = q ? q + ' ' + origin.ja : origin.ja;
+    return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q);
+  }
+  function distanceMeters(a, b) {
+    if (!a || !b) return null;
+    var R = 6371000, rad = Math.PI / 180;
+    var dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+    var s = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return Math.round(2 * R * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s)));
+  }
+  function formatDistance(m) {
+    if (m == null) return '';
+    return m < 1000 ? Math.max(10, Math.round(m / 10) * 10) + 'm' : (m / 1000).toFixed(1) + 'km';
+  }
+  function nearbyOrigin(day) {
+    if (myPos && inJapan(myPos)) return { center: myPos, label: '내 위치', ja: '', live: true };
+    var c = DAY_CENTERS[day] || DAY_CENTERS[5];
+    return { center: { lat: c.lat, lng: c.lng }, label: c.name, ja: c.ja, live: false };
+  }
+  function hasMapsSdk() { return typeof google !== 'undefined' && google.maps && google.maps.places && google.maps.places.Place; }
+  function setDialogMode(mode) {
+    dialogMode = mode;
+    searchDialog.setAttribute('data-mode', mode);
+    document.getElementById('place-nearby').hidden = mode !== 'nearby';
+    document.getElementById('place-choose').hidden = mode === 'nearby';
+    document.getElementById('place-query').placeholder = mode === 'nearby' ? '주변 장소 직접 검색 (예: 라멘, 편의점)' : '예: 아사쿠사 라멘, 시부야 카페';
+  }
+  function syncNearbyChips() {
+    NEARBY.forEach(function (cat) {
+      var btn = nearbyButtons[cat.id];
+      if (btn) btn.setAttribute('aria-pressed', String(!!(activeNearby && activeNearby.id === cat.id)));
+    });
+    if (openOnlyBtn) openOnlyBtn.setAttribute('aria-pressed', String(nearbyOpenOnly));
+  }
+  (function mountNearbyChips() {
+    var mainBar = document.getElementById('nearby-chips');
+    var modalBar = document.getElementById('place-nearby-chips');
+    if (modalBar) {
+      openOnlyBtn = document.createElement('button');
+      openOnlyBtn.type = 'button';
+      openOnlyBtn.id = 'place-open-only';
+      openOnlyBtn.className = 'nearby-chip nearby-open';
+      openOnlyBtn.textContent = '영업중만';
+      openOnlyBtn.setAttribute('aria-pressed', 'false');
+      openOnlyBtn.addEventListener('click', function () {
+        nearbyOpenOnly = !nearbyOpenOnly;
+        syncNearbyChips();
+        if (activeNearby) runNearbySearch(activeNearby, ++searchRequest);
+        else if (document.getElementById('place-query').value.trim()) searchPlaces();
+      });
+      modalBar.append(openOnlyBtn);
+    }
+    NEARBY.forEach(function (cat) {
+      if (mainBar) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'nearby-chip';
+        b.textContent = cat.icon + ' ' + cat.label;
+        b.addEventListener('click', function () { openNearby(cat.id); });
+        mainBar.append(b);
+      }
+      if (modalBar) {
+        var mb = document.createElement('button');
+        mb.type = 'button';
+        mb.className = 'nearby-chip';
+        mb.textContent = cat.icon + ' ' + cat.label;
+        mb.setAttribute('aria-pressed', 'false');
+        mb.addEventListener('click', function () {
+          activeNearby = cat;
+          nearbyOpenOnly = cat.openNow;
+          syncNearbyChips();
+          document.getElementById('place-query').value = cat.label;
+          runNearbySearch(cat, ++searchRequest);
+        });
+        nearbyButtons[cat.id] = mb;
+        modalBar.append(mb);
+      }
+    });
+  })();
   searchDialog.addEventListener('close', function () {
     searchRequest++;
     clearTimeout(searchTimer);
@@ -502,6 +620,7 @@
     candidate = null;
     clearTimeout(detailTimer);
     document.getElementById('place-choose').disabled = true;
+    document.getElementById('place-walk').hidden = true;
     document.getElementById('place-external').hidden = true;
     document.getElementById('place-details').replaceChildren();
     document.getElementById('place-details').hidden = true;
@@ -571,6 +690,12 @@
       // greedy: one-finger pan; safe because the map fills the screen and the sheet scrolls on its own
       placeMap = new libs[0].Map(document.getElementById('place-map'), { center: { lat: 35.6812, lng: 139.7671 }, zoom: 12, mapId: 'DEMO_MAP_ID', gestureHandling: 'greedy', colorScheme: 'FOLLOW_SYSTEM', mapTypeControl: false, streetViewControl: false, fullscreenControl: false, clickableIcons: false });
       placeMap.addListener('click', function () { setSheet('peek'); });
+      placeMap.addListener('dragend', function () {
+        if (dialogMode !== 'nearby' || !placeMap) return;
+        var c = placeMap.getCenter();
+        c = c.toJSON ? c.toJSON() : c;
+        nearbyFrom = { center: { lat: c.lat, lng: c.lng }, label: '지도 위치', ja: '', live: false };
+      });
       return placeMap;
     }).catch(function (err) { mapReady = null; throw err; });
     return mapReady;
@@ -584,7 +709,7 @@
     document.getElementById('place-sheet').setAttribute('data-size', size);
     document.getElementById('place-handle').setAttribute('aria-label', size === 'full' ? '목록 작게 보기' : '목록 크게 보기');
   }
-  function sheetHeights() { var h = window.innerHeight || 0; return { peek: 148, half: h / 2, full: h - 80 }; }
+  function sheetHeights() { var h = window.innerHeight || 0; return { peek: 148, half: h / 2, full: h - (dialogMode === 'nearby' ? 124 : 80) }; }
   // Drag the handle or the status line to resize. On release: a flick or a 24px+ drag moves at least one step
   // that way, a long drag lands on the nearest size. A plain tap on the handle still steps peek → half → full.
   var SHEET_ORDER = ['peek', 'half', 'full'];
@@ -649,7 +774,7 @@
   // Map area the sheet leaves uncovered; uses target sizes so it is right while the sheet animates.
   function mapPadding() {
     if (isWide()) return { top: 48, right: 48, bottom: 48, left: 12 + 380 + 48 };
-    return { top: 88, right: 32, bottom: sheetHeights()[sheetSize] + 24, left: 32 };
+    return { top: dialogMode === 'nearby' ? 128 : 88, right: 32, bottom: sheetHeights()[sheetSize] + 24, left: 32 };
   }
   function focusOn(location) {
     var p = mapPadding();
@@ -687,6 +812,10 @@
   requestMyPos();
   async function openPlaceSearch() {
     var request = ++searchRequest;
+    setDialogMode('pick');
+    activeNearby = null;
+    nearbyOpenOnly = false;
+    nearbyFrom = null;
     resetPreview();
     document.getElementById('place-choose').textContent = '12/' + current + ' 일정에 이 장소 선택';
     document.getElementById('place-manual').hidden = true;
@@ -701,8 +830,93 @@
       document.getElementById('place-status').textContent = '한국어로 검색하면 결과가 지도에 핀으로 표시돼요. 핀이나 목록을 눌러 비교해 보세요.';
     } catch (err) { if (request === searchRequest && searchDialog.open) searchFailed(); }
   }
+  async function openNearby(catId) {
+    var cat = NEARBY.filter(function (c) { return c.id === catId; })[0];
+    if (!cat) return false;
+    var request = ++searchRequest;
+    var origin = nearbyOrigin(current);
+    var ok = hasMapsSdk() || (await loadMaps() && hasMapsSdk());
+    if (request !== searchRequest) return false;
+    if (!ok) {
+      if (window.open) window.open(nearbyFallbackUrl(cat, origin), '_blank', 'noopener');
+      return false;
+    }
+    setDialogMode('nearby');
+    activeNearby = cat;
+    nearbyOpenOnly = cat.openNow;
+    nearbyFrom = origin;
+    syncNearbyChips();
+    resetPreview();
+    clearPlaceMarkers();
+    document.getElementById('place-results').replaceChildren();
+    document.getElementById('place-manual').hidden = true;
+    document.getElementById('place-query').value = cat.label;
+    document.getElementById('place-status').textContent = cat.label + '을(를) 찾는 중…';
+    setSheet('peek');
+    searchDialog.showModal();
+    if (nearbyButtons[cat.id] && nearbyButtons[cat.id].scrollIntoView) nearbyButtons[cat.id].scrollIntoView({ inline: 'nearest', block: 'nearest' });
+    try {
+      await initPlaceMap();
+      if (request !== searchRequest || !searchDialog.open) return false;
+      if (origin.live) { centerOnMe(request); }
+      else {
+        placeMap.setCenter(origin.center);
+        placeMap.setZoom(15);
+        requestMyPos(function () {
+          if (myPos && inJapan(myPos) && request === searchRequest && searchDialog.open && dialogMode === 'nearby' && !candidate && nearbyFrom === origin) {
+            var liveReq = ++searchRequest;
+            nearbyFrom = nearbyOrigin(current);
+            centerOnMe(liveReq);
+            runNearbySearch(cat, liveReq);
+          }
+        });
+      }
+      if (request === searchRequest) await runNearbySearch(cat, request);
+      return true;
+    } catch (err) {
+      if (request === searchRequest && searchDialog.open) { console.error('nearby open failed', err); searchFailed(); }
+      return false;
+    }
+  }
+  async function runNearbySearch(cat, request) {
+    if (!searchDialog.open || request !== searchRequest) return;
+    clearTimeout(searchTimer);
+    resetPreview();
+    clearPlaceMarkers();
+    document.getElementById('place-results').replaceChildren();
+    document.getElementById('place-manual').hidden = true;
+    document.getElementById('place-status').textContent = cat.label + '을(를) 찾는 중…';
+    results = [];
+    nextPage = null;
+    try {
+      await initPlaceMap();
+      if (request !== searchRequest || !searchDialog.open) return;
+      resultList = document.createElement('ol');
+      resultList.className = 'result-list';
+      moreButton = document.createElement('button');
+      moreButton.type = 'button';
+      moreButton.className = 'result-more';
+      moreButton.hidden = true;
+      moreButton.addEventListener('click', loadMore);
+      document.getElementById('place-results').replaceChildren(resultList, moreButton);
+      var from = nearbyFrom || nearbyOrigin(current);
+      nearbyFrom = from;
+      var body = { textQuery: cat.query, languageCode: 'ko', regionCode: 'JP', pageSize: 20, rankPreference: 'DISTANCE',
+        locationBias: { circle: { center: { latitude: from.center.lat, longitude: from.center.lng }, radius: 500 } } };
+      if (nearbyOpenOnly) body.openNow = true;
+      await loadPage(request, body);
+    } catch (err) { if (request === searchRequest && searchDialog.open) { console.error('nearby search failed', err); searchFailed(); } }
+  }
   function searchFailed() {
     clearTimeout(searchTimer);
+    if (dialogMode === 'nearby') {
+      document.getElementById('place-status').textContent = '검색에 연결하지 못했어요. 다시 누르거나 아래 ↗ 버튼으로 Google Maps에서 찾아 주세요.';
+      var external = document.getElementById('place-external');
+      var fallbackCat = activeNearby || { query: document.getElementById('place-query').value.trim() };
+      external.href = nearbyFallbackUrl(fallbackCat, nearbyFrom || nearbyOrigin(current));
+      external.hidden = false;
+      return;
+    }
     document.getElementById('place-status').textContent = '검색에 연결하지 못했어요. 다시 검색하거나 장소 이름을 직접 입력해 주세요.';
     document.getElementById('place-manual').hidden = false;
   }
@@ -710,6 +924,7 @@
     var query = document.getElementById('place-query').value.trim();
     if (!query || !searchDialog.open) return;
     var request = ++searchRequest;
+    if (dialogMode === 'nearby') { activeNearby = null; syncNearbyChips(); }
     clearTimeout(searchTimer);
     resetPreview();
     clearPlaceMarkers();
@@ -729,18 +944,26 @@
       moreButton.hidden = true;
       moreButton.addEventListener('click', loadMore);
       document.getElementById('place-results').replaceChildren(resultList, moreButton);
-      var c = placeMap.getCenter();
+      var c = dialogMode === 'nearby' && nearbyFrom ? nearbyFrom.center : placeMap.getCenter();
       c = c.toJSON ? c.toJSON() : c;
-      await loadPage(request, { textQuery: query, languageCode: 'ko', regionCode: 'JP', pageSize: 20,
-        locationBias: { circle: { center: { latitude: c.lat, longitude: c.lng }, radius: 5000 } } });
+      var body = { textQuery: query, languageCode: 'ko', regionCode: 'JP', pageSize: 20,
+        locationBias: { circle: { center: { latitude: c.lat, longitude: c.lng }, radius: dialogMode === 'nearby' ? 500 : 5000 } } };
+      if (dialogMode === 'nearby') {
+        body.rankPreference = 'DISTANCE';
+        if (nearbyOpenOnly) body.openNow = true;
+      }
+      await loadPage(request, body);
     } catch (err) { if (request === searchRequest && searchDialog.open) { console.error('place search failed', err); searchFailed(); } }
   }
   // Text Search (New) over REST: the UI-kit list stops at 20, this pages on with nextPageToken (Google caps a query at ~60).
   async function loadPage(request, body) {
+    var nearby = dialogMode === 'nearby';
+    var mask = nearby
+      ? 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.currentOpeningHours.openNow,nextPageToken'
+      : 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.photos,nextPageToken';
     var r = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': mapsKey,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.photos,nextPageToken' },
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': mapsKey, 'X-Goog-FieldMask': mask },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(15000)
     });
@@ -748,10 +971,13 @@
     var data = await r.json();
     if (request !== searchRequest || !searchDialog.open) return;
     var rows = (data.places || []).map(function (p) {
-      var photo = p.photos && p.photos[0];
+      var photo = !nearby && p.photos && p.photos[0];
       var author = photo && photo.authorAttributions && photo.authorAttributions[0];
+      var loc = p.location ? { lat: p.location.latitude, lng: p.location.longitude } : null;
       return { id: p.id, name: (p.displayName && p.displayName.text) || '', address: p.formattedAddress || '', rating: p.rating, count: p.userRatingCount,
-        location: p.location ? { lat: p.location.latitude, lng: p.location.longitude } : null,
+        location: loc,
+        openNow: p.currentOpeningHours && typeof p.currentOpeningHours.openNow === 'boolean' ? p.currentOpeningHours.openNow : null,
+        dist: nearby && loc && nearbyFrom ? distanceMeters(nearbyFrom.center, loc) : null,
         // each thumbnail is one billed Place Photos request (1,000/month free); lazy loading fetches only rows scrolled into view
         photo: photo ? 'https://places.googleapis.com/v1/' + photo.name + '/media?maxWidthPx=128&key=' + encodeURIComponent(mapsKey) : '',
         credit: (author && author.displayName) || '' };
@@ -763,7 +989,7 @@
       var item = document.createElement('li');
       var button = document.createElement('button');
       button.type = 'button';
-      button.className = 'result-item';
+      button.className = nearby ? 'result-item compact' : 'result-item';
       var num = document.createElement('span');
       num.className = 'result-num';
       num.textContent = String(start + i + 1);
@@ -772,27 +998,55 @@
       var meta = document.createElement('span');
       meta.className = 'result-meta';
       meta.textContent = [row.rating ? '★ ' + row.rating.toFixed(1) + (row.count ? ' (' + row.count + ')' : '') : '', row.address].filter(Boolean).join(' · ');
-      var thumb = document.createElement('span');
-      thumb.className = 'result-thumb';
-      if (row.photo) {
-        var img = document.createElement('img');
-        img.src = row.photo;
-        img.alt = '';
-        img.loading = 'lazy';
-        img.width = 64;
-        img.height = 64;
-        img.onerror = function () { img.remove(); }; // quota hit (429) or missing photo: keep the empty box, no broken icon
-        thumb.append(img);
+      if (nearby) {
+        item.className = 'result-row';
+        var badges = document.createElement('span');
+        badges.className = 'result-badges';
+        if (row.dist != null) {
+          var dist = document.createElement('span');
+          dist.className = 'badge-dist';
+          dist.textContent = formatDistance(row.dist);
+          badges.append(dist);
+        }
+        if (row.openNow === true || row.openNow === false) {
+          var open = document.createElement('span');
+          open.className = row.openNow ? 'badge-open' : 'badge-closed';
+          open.textContent = row.openNow ? '영업중' : '영업종료';
+          badges.append(open);
+        }
+        button.append(num, name, badges, meta);
+        button.addEventListener('click', function () { if (request === searchRequest && searchDialog.open) return openRow(row); });
+        var walk = document.createElement('a');
+        walk.className = 'result-walk';
+        walk.href = walkingUrl({ name: row.name, placeId: row.id });
+        walk.target = '_blank';
+        walk.rel = 'noopener';
+        walk.setAttribute('aria-label', row.name + ' 도보 길찾기');
+        walk.textContent = '길찾기 ↗';
+        item.append(button, walk);
+      } else {
+        var thumb = document.createElement('span');
+        thumb.className = 'result-thumb';
+        if (row.photo) {
+          var img = document.createElement('img');
+          img.src = row.photo;
+          img.alt = '';
+          img.loading = 'lazy';
+          img.width = 64;
+          img.height = 64;
+          img.onerror = function () { img.remove(); }; // quota hit (429) or missing photo: keep the empty box, no broken icon
+          thumb.append(img);
+        }
+        button.append(num, thumb, name, meta);
+        if (row.credit) {
+          var credit = document.createElement('span');
+          credit.className = 'result-credit';
+          credit.textContent = '사진: ' + row.credit; // Google requires showing photo author attribution
+          button.append(credit);
+        }
+        button.addEventListener('click', function () { if (request === searchRequest && searchDialog.open) return openRow(row); });
+        item.append(button);
       }
-      button.append(num, thumb, name, meta);
-      if (row.credit) {
-        var credit = document.createElement('span');
-        credit.className = 'result-credit';
-        credit.textContent = '사진: ' + row.credit; // Google requires showing photo author attribution
-        button.append(credit);
-      }
-      button.addEventListener('click', function () { if (request === searchRequest && searchDialog.open) return openRow(row); });
-      item.append(button);
       resultList.append(item);
     });
     moreButton.disabled = false;
@@ -838,7 +1092,21 @@
     if (places.length && sheetSize === 'peek') setSheet('half');
     if (placeMarkers.length === 1) { placeMap.setZoom(16); focusOn(placeMarkers[0].marker.position); }
     else if (placeMarkers.length) placeMap.fitBounds(bounds, mapPadding());
-    document.getElementById('place-status').textContent = places.length ? places.length + '곳을 찾았어요. 핀이나 목록에서 장소를 골라 보세요.' + (nextPage ? ' 목록 끝에서 더 볼 수 있어요.' : '') : '검색 결과가 없어요. 지역명이나 다른 장소 이름으로 다시 검색해 주세요.';
+    var status = document.getElementById('place-status');
+    if (dialogMode === 'nearby') {
+      var target = activeNearby ? activeNearby.label : '장소';
+      if (places.length) {
+        var where = nearbyFrom ? (nearbyFrom.live ? '내 위치 주변 ' : nearbyFrom.label + ' 주변 ') : '';
+        var note = nearbyFrom && !nearbyFrom.live && nearbyFrom.label !== '지도 위치' ? ' (일본 밖이라 일정 지역 기준)' : '';
+        status.textContent = where + target + ' ' + places.length + '곳 · 가까운 순' + note;
+      } else {
+        status.textContent = nearbyOpenOnly
+          ? '지금 영업 중인 ' + target + ' 결과가 없어요. "영업중만"을 끄면 전체 결과를 볼 수 있어요.'
+          : '주변에서 ' + target + ' 결과를 찾지 못했어요. 지도를 옮기거나 직접 검색해 보세요.';
+      }
+      return;
+    }
+    status.textContent = places.length ? places.length + '곳을 찾았어요. 핀이나 목록에서 장소를 골라 보세요.' + (nextPage ? ' 목록 끝에서 더 볼 수 있어요.' : '') : '검색 결과가 없어요. 지역명이나 다른 장소 이름으로 다시 검색해 주세요.';
   }
   async function previewPlace(place) {
     resetPreview();
@@ -857,7 +1125,14 @@
       await place.fetchFields({ fields: ['id', 'displayName', 'formattedAddress', 'location'] });
       if (request !== previewRequest || !searchDialog.open) return;
       candidate = { name: place.displayName, placeId: place.id, address: place.formattedAddress || '' };
-      choose.disabled = false;
+      if (dialogMode === 'nearby') {
+        choose.disabled = true;
+        var walk = document.getElementById('place-walk');
+        walk.href = walkingUrl(candidate);
+        walk.hidden = false;
+      } else {
+        choose.disabled = false;
+      }
       document.getElementById('place-detail-actions').hidden = false;
       var external = document.getElementById('place-external');
       external.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(candidate.name) + '&query_place_id=' + encodeURIComponent(candidate.placeId);
@@ -868,7 +1143,11 @@
       widget.addEventListener('gmp-load', function () {
         if (request !== previewRequest || !searchDialog.open) return;
         clearTimeout(detailTimer);
-        if (document.getElementById('place-menu-panel').hidden) status.textContent = candidate.name + ' · 지도와 상세 정보를 확인한 뒤 아래에서 선택하세요.';
+        if (document.getElementById('place-menu-panel').hidden) {
+          status.textContent = candidate.name + (dialogMode === 'nearby'
+            ? ' · 영업시간·리뷰를 확인하고 도보 길찾기를 눌러 보세요.'
+            : ' · 지도와 상세 정보를 확인한 뒤 아래에서 선택하세요.');
+        }
       });
       widget.addEventListener('gmp-error', function () {
         if (request !== previewRequest || !searchDialog.open) return;
