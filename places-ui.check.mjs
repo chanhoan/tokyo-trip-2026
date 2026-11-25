@@ -45,17 +45,20 @@ const sdk = {
 let geoFix = { latitude: 37.56, longitude: 126.97 }; // Seoul: outside Japan
 let geoCalls = 0;
 const searchBodies = [];
+const searchHeaders = [];
 const searchReplies = []; // queued Text Search replies: JSON body, 'fail', or a pending Promise
+const openedUrls = [];
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 const rest = name => ({ id: 'ChIJ_' + name, displayName: { text: name }, formattedAddress: '도쿄', location: { latitude: 35.7, longitude: 139.8 }, rating: 4.4, userRatingCount: 10, photos: [{ name: 'places/ChIJ_' + name + '/photos/p1', authorAttributions: [{ displayName: '작가' }] }] });
 const context = vm.createContext({
   document: { getElementById: node, createElement: () => new Element(), body: { contains: () => true } },
-  google: { maps: sdk }, window: {}, current: 5, console: { error() {} },
+  google: { maps: sdk }, window: { open: (url) => openedUrls.push(url) }, current: 5, console: { error() {} },
   esc: value => String(value).replaceAll('<', '&lt;'),
   setTimeout, clearTimeout, AbortSignal,
   fetch: async (url, options) => {
     if (!String(url).includes('searchText')) return { ok: true, json: async () => ({}) };
     searchBodies.push(JSON.parse(options.body));
+    searchHeaders.push(options.headers);
     const reply = await searchReplies.shift();
     return reply === 'fail' ? { ok: false, status: 403 } : { ok: true, json: async () => reply ?? { places: [] } };
   },
@@ -261,6 +264,125 @@ assert.equal(node('place-manual').hidden, false, 'denied search offers manual en
 node('place-manual').dispatch('click');
 assert.match(node('f-place').innerHTML, /id="f-name"/);
 assert.equal(context.picked, null, 'manual fallback clears previous picked place');
+
+// ── nearby one-tap radar tests ──
+assert.deepEqual(node('nearby-chips').children.map(c => c.textContent),
+  ['🏪 편의점', '☕ 카페', '🍜 음식점', '🍺 이자카야', '🧳 코인로커', '💊 드럭스토어'], 'main bar mounts all 6 categories');
+assert.equal(node('place-nearby-chips').children[0].textContent, '영업중만', 'modal bar starts with open-now toggle');
+assert.equal(node('place-nearby-chips').children.length, 7, 'modal bar has open-now toggle + 6 categories');
+assert.equal(context.formatDistance(4), '10m');
+assert.equal(context.formatDistance(124), '120m');
+assert.equal(context.formatDistance(1260), '1.3km');
+assert.equal(context.formatDistance(null), '');
+assert.ok(context.distanceMeters({ lat: 35.6580, lng: 139.7016 }, { lat: 35.6590, lng: 139.7016 }) > 100);
+assert.match(context.walkingUrl({ name: '세븐일레븐', placeId: 'ChIJ_711' }), /travelmode=walking.*destination_place_id=ChIJ_711/);
+
+// Outside Japan (Seoul) on day 10 → falls back to Shibuya
+geoFix = { latitude: 37.56, longitude: 126.97 };
+context.requestMyPos();
+context.current = 10;
+const shibuyaOrigin = context.nearbyOrigin(10);
+assert.equal(shibuyaOrigin.live, false);
+assert.equal(shibuyaOrigin.label, '시부야');
+assert.match(context.nearbyFallbackUrl({ query: '飲食店' }, shibuyaOrigin), /%E9%A3%B2%E9%A3%9F%E5%BA%97%20%E6%B8%8B%E8%B0%B7/);
+
+searchReplies.push({
+  places: [
+    { id: 'ChIJ_ramen', displayName: { text: '시부야 라멘' }, formattedAddress: '시부야구', location: { latitude: 35.6591, longitude: 139.7016 }, rating: 4.5, userRatingCount: 80, currentOpeningHours: { openNow: true } },
+    { id: 'ChIJ_soba', displayName: { text: '시부야 소바' }, formattedAddress: '시부야구', location: { latitude: 35.6610, longitude: 139.7016 }, rating: 4.1, userRatingCount: 20, currentOpeningHours: { openNow: false } }
+  ]
+});
+assert.equal(await context.openNearby('food'), true);
+assert.equal(node('place-dialog')['data-mode'], 'nearby');
+assert.equal(node('place-nearby').hidden, false);
+assert.equal(node('place-choose').hidden, true);
+assert.equal(searchBodies.at(-1).textQuery, '飲食店');
+assert.equal(searchBodies.at(-1).rankPreference, 'DISTANCE');
+assert.equal(searchBodies.at(-1).openNow, true, 'food defaults to openNow');
+assert.equal(searchBodies.at(-1).locationBias.circle.radius, 500);
+assert.ok(searchHeaders.at(-1)['X-Goog-FieldMask'].includes('places.currentOpeningHours.openNow'));
+assert.ok(!searchHeaders.at(-1)['X-Goog-FieldMask'].includes('places.photos'), 'nearby omits photos field to save quota');
+assert.match(node('place-status').textContent, /시부야 주변 음식점 2곳 · 가까운 순 \(일본 밖이라 일정 지역 기준\)/);
+const nearbyList = node('place-results').children[0];
+assert.equal(nearbyList.children[0].className, 'result-row');
+assert.equal(nearbyList.children[0].children[0].className, 'result-item compact');
+assert.equal(nearbyList.children[0].children[0].children[2].children[0].textContent, '120m');
+assert.equal(nearbyList.children[0].children[0].children[2].children[1].textContent, '영업중');
+assert.equal(nearbyList.children[1].children[0].children[2].children[1].textContent, '영업종료');
+assert.match(nearbyList.children[0].children[1].href, /travelmode=walking.*ChIJ_ramen/, 'row includes walking directions shortcut');
+
+// Detail view in nearby mode shows walking directions instead of choose button
+await nearbyList.children[0].children[0].dispatch('click');
+assert.equal(node('place-choose').disabled, true);
+assert.equal(node('place-walk').hidden, false);
+assert.match(node('place-walk').href, /travelmode=walking.*ChIJ_ramen/);
+
+// Toggle openNow off inside modal → re-queries without openNow
+searchReplies.push({ places: [{ id: 'ChIJ_all', displayName: { text: '전체 식당' }, formattedAddress: '시부야구', location: { latitude: 35.6585, longitude: 139.7016 } }] });
+node('place-nearby-chips').children[0].dispatch('click');
+await tick();
+assert.equal(searchBodies.at(-1).openNow, undefined, 'toggling open-only off removes openNow filter');
+assert.equal(node('place-nearby-chips').children[0]['aria-pressed'], 'false');
+
+// Switch to coin locker inside modal → Japanese query, openNow off by default
+searchReplies.push({ places: [{ id: 'ChIJ_lock', displayName: { text: '시부야역 코인로커' }, formattedAddress: '시부야역', location: { latitude: 35.6582, longitude: 139.7016 } }] });
+node('place-nearby-chips').children[5].dispatch('click'); // 0: openOnly, 1..6: cvs, cafe, food, izakaya, locker, drug
+await tick();
+assert.equal(searchBodies.at(-1).textQuery, 'コインロッカー');
+assert.equal(searchBodies.at(-1).openNow, undefined);
+assert.equal(node('place-nearby-chips').children[5]['aria-pressed'], 'true');
+
+// Drag map → subsequent chip searches around dragged map center
+context.placeMap.setCenter({ lat: 35.69, lng: 139.70 });
+context.placeMap.ondragend();
+searchReplies.push({ places: [] });
+node('place-nearby-chips').children[1].dispatch('click'); // cvs
+await tick();
+assert.deepEqual(searchBodies.at(-1).locationBias.circle.center, { latitude: 35.69, longitude: 139.70 });
+assert.match(node('place-status').textContent, /찾지 못했어요/);
+
+// Inside Japan (Asakusa) + empty open-now izakaya shows hint to turn off open-only
+node('place-dialog').close();
+geoFix = { latitude: 35.7148, longitude: 139.7967 };
+context.requestMyPos();
+searchReplies.push({ places: [] });
+await context.openNearby('izakaya');
+assert.equal(searchBodies.at(-1).textQuery, '居酒屋');
+assert.equal(searchBodies.at(-1).openNow, true);
+assert.deepEqual(searchBodies.at(-1).locationBias.circle.center, { latitude: 35.7148, longitude: 139.7967 });
+assert.match(node('place-status').textContent, /영업중만/);
+
+// Error in nearby mode shows external Maps link, not manual itinerary input
+searchReplies.push('fail');
+node('place-nearby-chips').children[6].dispatch('click'); // drug
+await tick();
+assert.equal(node('place-manual').hidden, true);
+assert.equal(node('place-external').hidden, false);
+assert.match(node('place-external').href, /google\.com\/maps\/search/);
+node('place-dialog').close();
+
+// Returning to pick mode restores itinerary search defaults
+await context.openPlaceSearch();
+assert.equal(node('place-dialog')['data-mode'], 'pick');
+assert.equal(node('place-nearby').hidden, true);
+assert.equal(node('place-choose').hidden, false);
+node('place-query').value = '우에노';
+searchReplies.push({ places: [rest('우에노 공원')] });
+await context.searchPlaces();
+assert.equal(searchBodies.at(-1).rankPreference, undefined, 'pick mode keeps relevance sorting');
+assert.equal(searchBodies.at(-1).openNow, undefined);
+node('place-dialog').close();
+
+// Fallback when Maps SDK is unavailable opens external Google Maps search
+const savedPlace = sdk.places.Place;
+sdk.places.Place = null;
+assert.equal(await context.openNearby('cvs'), false);
+assert.equal(openedUrls.length, 1);
+assert.match(openedUrls[0], /google\.com\/maps\/search\/\?api=1&query=%E3%82%B3%E3%83%B3%E3%83%93%E3%83%8B/);
+assert.equal(node('place-dialog').open, false);
+sdk.places.Place = savedPlace;
+context.current = 5;
+
 assert.equal(html, readFileSync(new URL('./도쿄·후지·요코하마 동선 지도.html', import.meta.url), 'utf8'), 'local Artifact copy stays in sync');
 
 const submitSource = html.slice(html.indexOf("  detail.addEventListener('submit'"), html.indexOf("  detail.addEventListener('click'"));
