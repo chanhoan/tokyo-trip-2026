@@ -42,6 +42,56 @@ assert.deepEqual(ids(), ['fixed:9:체크아웃', 'lunch', 'fixed:9:체크인', '
 context.timelineOrders = {};
 assert.deepEqual(ids(), ['fixed:9:체크아웃', 'lunch', 'fixed:9:체크인', 'late'], 'days without manual order remain chronological');
 console.log('timeline reorder ok');
+const voting = vm.createContext({
+  member: '이영석', loadedVoteBy: '이영석', loadFailed: false, esc: String, voteSaving: false,
+});
+vm.runInContext(html.slice(html.indexOf('  function voteButtons('), html.indexOf('  function renderTimeline(')), voting);
+const place = { id: 'lunch', name: '점심', votes: { like: 4, dislike: 1, mine: 'like' } };
+assert.match(voting.voteButtons(place), /aria-pressed="true"><svg[^]*<span class="count">4</);
+assert.match(voting.voteButtons(place), /data-vote="dislike"[^>]*aria-pressed="false"><svg[^]*<span class="count">1</);
+assert.match(voting.voteButtons({ id: 'old', name: '예전 일정' }), /<span class="count"><\/span>/, 'zero hides the count');
+voting.member = '정찬환';
+assert.doesNotMatch(voting.voteButtons(place), /aria-pressed="true"/, 'switching names hides the previous choice while loading');
+voting.member = '';
+assert.doesNotMatch(voting.voteButtons(place), / disabled/, 'the reaction is clickable before choosing a name');
+Object.assign(voting, {
+  member: '정찬환', loadedVoteBy: '정찬환', voteSaving: false, loadRequest: 0,
+  shared: [{ ...place, votes: { like: 4, dislike: 1, mine: null } }],
+  document: { getElementById: () => ({}) }, renderTimeline() {}, load() {},
+  console: { error() {} }, alert: () => { voting.alerted = true; },
+});
+vm.runInContext(html.slice(html.indexOf('  async function castVote('), html.indexOf("  detail.addEventListener('click'", html.indexOf('  async function castVote('))), voting);
+for (const [button, expectedVote, summary] of [
+  ['like', 'like', { like: 5, dislike: 1, mine: 'like' }],
+  ['dislike', 'dislike', { like: 4, dislike: 2, mine: 'dislike' }],
+  ['dislike', null, { like: 4, dislike: 1, mine: null }],
+]) {
+  voting.fetch = async (url, options) => {
+    assert.equal(url, '/api/places?vote=1');
+    assert.equal(options.method, 'PATCH');
+    assert.deepEqual(JSON.parse(options.body), { id: place.id, by: '정찬환', vote: expectedVote });
+    return { ok: true, json: async () => summary };
+  };
+  await voting.castVote(place.id, button);
+  assert.deepEqual(voting.shared[0].votes, summary);
+  assert.equal(voting.voteSaving, false);
+}
+voting.fetch = async () => ({ ok: false, status: 500 });
+await voting.castVote(place.id, 'like');
+assert.deepEqual(voting.shared[0].votes, { like: 4, dislike: 1, mine: null });
+assert.equal(voting.alerted, true);
+voting.member = '이영석';
+voting.fetchPlaces = async by => {
+  assert.equal(by, '이영석');
+  return { places: [place] };
+};
+voting.fetch = async (_, options) => {
+  assert.deepEqual(JSON.parse(options.body), { id: place.id, by: '이영석', vote: null }, 'changing names reads any existing vote for the new name');
+  return { ok: true, json: async () => ({ like: 3, dislike: 1, mine: null }) };
+};
+await voting.castVote(place.id, 'like');
+assert.equal(voting.loadedVoteBy, '이영석');
+console.log('vote counts, choice switching, cancellation and failure ok');
 const stayContext = vm.createContext({ esc: value => String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;') });
 vm.runInContext(html.slice(html.indexOf('  function mapsUrl('), html.indexOf('  function renderTimeline(')), stayContext);
 vm.runInContext(html.slice(html.indexOf('  function routeLink('), html.indexOf("  document.querySelectorAll('tr[data-stay]')")), stayContext);

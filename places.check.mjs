@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { parsePlace, parseOrder, parseDone } from './api/places.js';
+import handler, { parsePlace, parseOrder, parseDone, parseVote, voteSummary } from './api/places.js';
+import { MEMBERS } from './members.js';
 
 const ok = { day: 9, time: '13:30', name: ' 아카렌가 창고 ', placeId: 'ChIJ_abc-123', address: '요코하마', memo: '', by: '한승남' };
 assert.deepEqual(parsePlace(ok), { day: 9, time: '13:30', name: '아카렌가 창고', placeId: 'ChIJ_abc-123', address: '요코하마', memo: '', by: '한승남' });
@@ -33,3 +34,69 @@ for (const bad of [null, {}, { day: 4, done: true }, { day: 13, done: true }, { 
   assert.equal(parseDone(bad), null);
 }
 console.log('parseDone ok');
+
+const vote = { id: order.ids[1], by: ok.by, vote: 'like' };
+assert.deepEqual(parseVote({ ...vote, extra: 'ignored' }), vote);
+assert.deepEqual(parseVote({ ...vote, vote: null }), { ...vote, vote: null });
+for (const bad of [null, { ...vote, id: order.ids[0] }, { ...vote, by: '여행자' },
+  { ...vote, vote: 'unknown' }, { ...vote, vote: undefined }]) {
+  assert.equal(parseVote(bad), null);
+}
+const votes = { [ok.by]: 'like', 정상범: 'dislike', unknown: 'like' };
+assert.deepEqual(voteSummary(votes), { like: 1, dislike: 1, mine: null });
+assert.deepEqual(voteSummary(votes, ok.by), { like: 1, dislike: 1, mine: 'like' });
+assert.deepEqual(voteSummary(undefined, ok.by), { like: 0, dislike: 0, mine: null });
+console.log('vote input and aggregate privacy ok');
+
+process.env.UPSTASH_REDIS_REST_URL = 'https://redis.test';
+process.env.UPSTASH_REDIS_REST_TOKEN = 'test-token';
+let stored = true;
+const ballots = {};
+const id = vote.id;
+const hash = data => Object.entries(data).flatMap(([key, value]) => [key, JSON.stringify(value)]);
+globalThis.fetch = async (url, options) => {
+  const endpoint = new URL(url);
+  assert.equal(endpoint.hostname, 'redis.test');
+  const cmd = JSON.parse(options.body);
+  if (endpoint.pathname === '/multi-exec') {
+    assert.deepEqual(cmd, [['hdel', 'places', id], ['hdel', 'place-votes', id]]);
+    stored = false;
+    for (const name of Object.keys(ballots)) delete ballots[name];
+    return Response.json([{ result: 1 }, { result: 1 }]);
+  }
+  if (endpoint.pathname === '/pipeline') return Response.json(cmd.map(redisReply));
+  return Response.json(redisReply(cmd));
+};
+function redisReply(cmd) {
+  const [op, key] = cmd;
+  if (op === 'smembers') return { result: [] };
+  if (op === 'hgetall') {
+    const data = key === 'places' && stored ? { [id]: { id, ...ok, at: 1 } } :
+      key === 'place-votes' && Object.keys(ballots).length ? { [id]: ballots } : {};
+    return { result: hash(data) };
+  }
+  const [, , keyCount, placesKey, votesKey, placeId, name, choice] = cmd;
+  assert.deepEqual([op, keyCount, placesKey, votesKey, placeId], ['eval', 2, 'places', 'place-votes', id]);
+  if (!stored) return { result: null };
+  if (choice === '') delete ballots[name];
+  else ballots[name] = choice;
+  return { result: JSON.stringify(ballots) };
+}
+async function request(method, query = {}, body) {
+  const res = { setHeader() {}, status(code) { this.code = code; return this; }, json(data) { this.data = data; }, end() {} };
+  await handler({ method, query, body }, res);
+  return res;
+}
+const [a, b] = MEMBERS;
+const cast = (by, vote) => request('PATCH', { vote: '1' }, { id, by, vote });
+const readVotes = async query => (await request('GET', query)).data.places[0].votes;
+assert.deepEqual(await readVotes(), { like: 0, dislike: 0, mine: null });
+const results = await Promise.all([cast(a, 'like'), cast(b, 'dislike')]);
+assert.deepEqual(results.map(res => res.code), [200, 200]);
+assert.deepEqual(await readVotes({ voter: a }), { like: 1, dislike: 1, mine: 'like' });
+assert.deepEqual(await readVotes(), { like: 1, dislike: 1, mine: null });
+assert.deepEqual((await cast(a, 'dislike')).data, { like: 0, dislike: 2, mine: 'dislike' });
+assert.deepEqual((await cast(a, null)).data, { like: 0, dislike: 1, mine: null });
+assert.equal((await request('DELETE', { id })).code, 204);
+assert.equal((await cast(a, 'like')).code, 404);
+console.log('vote route and mocked Redis REST contract ok');

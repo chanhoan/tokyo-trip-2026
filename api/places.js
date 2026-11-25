@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { MEMBERS } from '../members.js';
 
 const KEY = 'places';
+const VOTES_KEY = 'place-votes';
 const ORDER_KEY = 'timeline-order';
 const DONE_KEY = 'done-days'; // set of days stamped 여행 완료
 // ponytail: flat cap instead of rate limiting; the URL is only shared within the group
@@ -48,11 +49,44 @@ export function parseDone(body) {
   return { day: body.day, done: body.done };
 }
 
+export function parseVote(body) {
+  if (!body || typeof body.id !== 'string' || !/^[a-f0-9-]{36}$/.test(body.id) ||
+    !MEMBERS.includes(body.by) || !['like', 'dislike', null].includes(body.vote)) return null;
+  return { id: body.id, by: body.by, vote: body.vote };
+}
+
+export function voteSummary(votes = {}, by) {
+  const choices = MEMBERS.map(member => votes[member]);
+  return {
+    like: choices.filter(choice => choice === 'like').length,
+    dislike: choices.filter(choice => choice === 'dislike').length,
+    mine: choices[MEMBERS.indexOf(by)] ?? null,
+  };
+}
+
+// Check existence and change only this member's vote in one Redis operation.
+const SAVE_VOTE = `
+  if redis.call('HEXISTS', KEYS[1], ARGV[1]) == 0 then return nil end
+  local votes = cjson.decode(redis.call('HGET', KEYS[2], ARGV[1]) or '{}')
+  if ARGV[3] == '' then votes[ARGV[2]] = nil else votes[ARGV[2]] = ARGV[3] end
+  if next(votes) == nil then
+    redis.call('HDEL', KEYS[2], ARGV[1])
+    return '{}'
+  end
+  local updated = cjson.encode(votes)
+  redis.call('HSET', KEYS[2], ARGV[1], updated)
+  return updated
+`;
+
 export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
-      const [all, orders, done] = await Promise.all([db().hgetall(KEY), db().hgetall(ORDER_KEY), db().smembers(DONE_KEY)]);
-      const places = Object.values(all ?? {}).sort((a, b) => a.at - b.at);
+      const redis = db();
+      const [all, orders, done, votes] = await Promise.all([
+        redis.hgetall(KEY), redis.hgetall(ORDER_KEY), redis.smembers(DONE_KEY), redis.hgetall(VOTES_KEY),
+      ]);
+      const places = Object.values(all ?? {}).sort((a, b) => a.at - b.at)
+        .map(place => ({ ...place, votes: voteSummary(votes?.[place.id], req.query?.voter) }));
       res.setHeader('Cache-Control', 'no-store');
       return res.status(200).json({ places, orders: orders ?? {}, done: (done ?? []).map(Number) });
     }
@@ -80,6 +114,13 @@ export default async function handler(req, res) {
       await db().hset(ORDER_KEY, { [order.day]: order.ids });
       return res.status(200).json(order);
     }
+    if (req.method === 'PATCH' && req.query?.vote === '1') {
+      const vote = parseVote(req.body);
+      if (!vote) return res.status(400).json({ error: '일정과 투표하는 사람을 확인해 주세요.' });
+      const updated = await db().eval(SAVE_VOTE, [KEY, VOTES_KEY], [vote.id, vote.by, vote.vote ?? '']);
+      if (updated == null) return res.status(404).json({ error: '이미 지워진 일정이에요.' });
+      return res.status(200).json(voteSummary(updated, vote.by));
+    }
     if (req.method === 'PATCH') {
       const mark = parseDone(req.body);
       if (!mark) return res.status(400).json({ error: '날짜를 확인해 주세요.' });
@@ -90,7 +131,7 @@ export default async function handler(req, res) {
     if (req.method === 'DELETE') {
       const id = String(req.query.id ?? '');
       if (!id) return res.status(400).json({ error: '지울 장소를 찾지 못했어요.' });
-      await db().hdel(KEY, id);
+      await db().multi().hdel(KEY, id).hdel(VOTES_KEY, id).exec();
       return res.status(204).end();
     }
     res.setHeader('Allow', 'GET, POST, PUT, PATCH, DELETE');
