@@ -387,28 +387,36 @@ assert.equal(html, readFileSync(new URL('./도쿄·후지·요코하마 동선 �
 
 const submitSource = html.slice(html.indexOf("  detail.addEventListener('submit'"), html.indexOf("  detail.addEventListener('click'"));
 const submitTarget = new Element();
-const fields = Object.fromEntries(['f-hour', 'f-minute', 'f-name', 'f-memo', 'f-by', 'submit'].map(id => [id, { value: '', disabled: false }]));
+const fields = Object.fromEntries(['f-hour', 'f-minute', 'f-name', 'f-memo', 'submit'].map(id => [id, { value: '', disabled: false }]));
 const form = { id: 'add-form', querySelector: selector => fields[selector === 'button[type="submit"]' ? 'submit' : selector.slice(1)] };
 let posted;
 let putUrl;
 let responseOk = true;
+let memberPrompt = false;
 const submitContext = vm.createContext({
-  detail: submitTarget, current: 5, picked: null, editing: null, document: { getElementById: node },
+  detail: submitTarget, current: 5, picked: null, editing: null, member: '이영석',
+  shared: [{ id: 'abc-1', by: '한승남' }], document: { getElementById: node },
+  openMemberPicker() { memberPrompt = true; },
   localStorage: { setItem() {} }, showPicked() {}, mountPlaceInput() {}, load: async () => {}, alert() {},
   setNowTime(f) { f.querySelector('#f-hour').value = '12'; f.querySelector('#f-minute').value = '34'; },
   fetch: async (url, options) => { posted = JSON.parse(options.body); putUrl = options.method === 'PUT' ? url : null; return { ok: responseOk, json: async () => ({ error: '저장 실패' }) }; }
 });
 vm.runInContext(submitSource, submitContext);
+submitContext.member = '';
+fields['f-name'].value = '센소지';
+submitTarget.dispatch('submit', { target: form, preventDefault() {} });
+assert.equal(memberPrompt, true, 'adding without a name opens the header picker');
+assert.equal(posted, undefined, 'opening the name picker does not save an itinerary');
+submitContext.member = '이영석';
 for (const [hour, minute] of [['00', '00'], ['09', '05'], ['23', '59']]) {
   fields['f-hour'].value = hour;
   fields['f-minute'].value = minute;
   fields['f-name'].value = '센소지';
-  fields['f-by'].value = '여행자';
   submitTarget.dispatch('submit', { target: form, preventDefault() {} });
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(posted.time, hour + ':' + minute, 'POST preserves padded 24-hour time');
   assert.equal(fields['f-hour'].value + ':' + fields['f-minute'].value, '12:34', 'saving resets the time to now');
-  assert.equal(fields['f-by'].value, '여행자', 'saving preserves nickname');
+  assert.equal(posted.by, '이영석', 'a new place uses the selected trip member');
 }
 responseOk = false;
 fields['f-hour'].value = '09';
@@ -422,6 +430,7 @@ submitContext.editing = 'abc-1';
 submitTarget.dispatch('submit', { target: form, preventDefault() {} });
 await new Promise(resolve => setTimeout(resolve, 0));
 assert.equal(putUrl, '/api/places?id=abc-1', 'editing saves with PUT to the same id');
+assert.equal(posted.by, '한승남', 'editing preserves the original author');
 assert.equal(submitContext.editing, null, 'a saved edit returns the form to adding');
 assert.equal(fields.submit.textContent, '12/5 일정에 추가', 'submit label goes back to add');
 context.picked = { name: '센소지', placeId: 'x', address: '' };
