@@ -87,6 +87,15 @@ h2 { font-weight: 700; font-size: 20px; margin: 0; text-wrap: balance; }
 /* 참가자 picture: wide image at a readable height; phones scroll it sideways, starting on the left column of faces */
 .crew-dialog { max-width: calc(100vw - 24px); max-height: none; padding: 0; border: 0; border-radius: 12px; background: #000; overflow-x: auto; overscroll-behavior: contain; }
 .crew-dialog::backdrop { background: rgb(0 0 0 / .75); }
+.terror-dialog { width: min(320px, calc(100vw - 32px)); padding: 24px 22px 18px; border: 3px solid var(--accent); border-radius: 16px; background: var(--card); color: var(--ink); text-align: center; }
+.terror-dialog[open] { animation: terror-shake .45s; }
+.terror-dialog::backdrop { background: rgb(200 16 46 / .35); }
+.terror-siren { font-size: 44px; line-height: 1; }
+.terror-dialog h2 { margin: 10px 0 8px; font-size: 22px; color: var(--accent); }
+.terror-dialog p { margin: 0 0 18px; font-size: 18px; font-weight: 700; line-height: 1.5; }
+.terror-dialog button { width: 100%; min-height: 48px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+@keyframes terror-shake { 0%, 100% { translate: 0; } 20%, 60% { translate: -8px; } 40%, 80% { translate: 8px; } }
+@media (prefers-reduced-motion: reduce) { .terror-dialog[open] { animation: none; } }
 .crew-dialog img { display: block; height: min(72dvh, 1401px); width: auto; max-width: none; cursor: zoom-out; }
 .crew-close { position: fixed; top: 12px; right: 12px; width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgb(0 0 0 / .65); color: #fff; font-size: 18px; cursor: pointer; }
 .sec-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
