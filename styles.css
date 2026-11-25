@@ -36,13 +36,11 @@ body { background: var(--paper); color: var(--ink); font-family: var(--font-body
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 4px 12px; }
-.head-meta { grid-column: 1 / -1; }
+header { position: relative; display: grid; gap: 4px; }
 .head-main { display: grid; gap: 4px; min-width: 0; }
-.settle-link { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap; min-height: 44px; padding: 0 16px; border: 1px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--ink); font-size: 14px; font-weight: 700; text-decoration: none; }
+.settle-link { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; margin-inline-start: auto; white-space: nowrap; min-height: 44px; padding: 0 16px; border: 1px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--ink); font-size: 14px; font-weight: 700; text-decoration: none; }
 .kicker { font-family: var(--font-mono); font-size: 13px; color: var(--muted); letter-spacing: .04em; }
 /* theme button: pinned to the header's top-right corner, above 정산, so it takes no room from the tight title row on phones */
-header { position: relative; }
 .theme-btn { position: absolute; top: -18px; right: 0; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
 .theme-btn:hover { background: var(--soft); color: var(--ink); }
 .theme-btn svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -63,28 +61,29 @@ h2 { font-weight: 700; font-size: 20px; margin: 0; text-wrap: balance; }
 .member-picker button[aria-pressed="true"] { border-color: var(--accent); background: var(--soft); font-weight: 700; }
 .dday { font: 600 14px var(--font-mono); color: var(--accent); border: 1.5px solid var(--accent); border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
 @media (max-width: 559px) {
-  header { column-gap: 6px; }
   .title-row { gap: 5px; flex-wrap: nowrap; }
   .title-row h1 { flex: none; font-size: clamp(16px, 5.1vw, 24px); white-space: nowrap; }
   .kicker { font-size: 10px; letter-spacing: 0; }
   .dday { flex: none; font-size: 11px; padding: 2px 4px; }
   .crew-actions { gap: 4px; }
   .crew-actions > .toggle { min-height: 44px; padding-inline: 7px; font-size: 12px; }
-  .settle-link { justify-content: center; min-width: 44px; padding-inline: 9px; font-size: 12px; }
   .member-hint { --hint-offset: 8px; left: calc(50% + var(--hint-offset)); padding-inline: 6px; font-size: 11px; }
   .member-hint::after { left: calc(50% - var(--hint-offset)); }
+  .member-picker { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .member-picker button { padding-inline: 2px; font-size: 13px; white-space: nowrap; }
 }
-@media (max-width: 459px) { .settle-link svg { display: none; } }
-@media (max-width: 374px) {
+@media (max-width: 389px) { .settle-link { gap: 4px; padding-inline: 6px; } }
+@media (max-width: 419px) {
+  .title-row, .crew-actions { gap: 3px; }
+  .crew-actions > .toggle { padding-inline: 5px; font-size: 11px; }
   .member-hint { width: max-content; max-width: 88px; line-height: 14px; white-space: normal; text-wrap: balance; }
 }
+@media (max-width: 374px) { .settle-link { padding-inline: 4px; } }
 @media (max-width: 359px) {
-  header { column-gap: 3px; }
-  .title-row, .crew-actions { gap: 3px; }
   .dday { border: 0; padding: 0; }
-  .crew-actions > .toggle { padding-inline: 5px; font-size: 11px; }
   .member-hint { --hint-offset: 12px; max-width: 68px; }
 }
+@media (max-width: 349px) { header { margin-inline: -10px; } }
 /* 참가자 picture: wide image at a readable height; phones scroll it sideways, starting on the left column of faces */
 .crew-dialog { max-width: calc(100vw - 24px); max-height: none; padding: 0; border: 0; border-radius: 12px; background: #000; overflow-x: auto; overscroll-behavior: contain; }
 .crew-dialog::backdrop { background: rgb(0 0 0 / .75); }
