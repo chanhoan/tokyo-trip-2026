@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { fetchRate } from './api/rate.js';
+import handler, { fetchRate } from './api/rate.js';
 
 const reply = (body, ok = true) => async () => ({ ok, status: ok ? 200 : 500, json: async () => body });
 const fail = async () => { throw new Error('refused'); };
@@ -36,6 +36,22 @@ try {
     { rate: 9.05, prev: null, at: 1764115201000, daily: true, source: 'ExchangeRate-API' });
   assert.equal(await fetchRate(reply({}, false), NOW), null, 'all down → no rate');
 } finally { console.error = quiet; }
+// the handler never lets a rate be cached: opening the page must ask the source afresh
+const realFetch = globalThis.fetch;
+try {
+  for (const [answer, code] of [[reply(yahoo), 200], [reply({}, false), 502]]) {
+    globalThis.fetch = answer;
+    const res = { headers: {}, setHeader(k, v) { this.headers[k] = v; }, status(c) { this.code = c; return this; }, json(b) { this.body = b; } };
+    console.error = () => {};
+    await handler({ method: 'GET' }, res);
+    console.error = quiet;
+    assert.equal(res.code, code);
+    assert.equal(res.headers['Cache-Control'], 'no-store', 'no edge or browser cache on ' + code);
+  }
+} finally { globalThis.fetch = realFetch; console.error = quiet; }
+const page = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
+assert.match(page, /fetch\('\/api\/rate', \{ cache: 'no-store'/, 'the browser asks afresh too');
+assert.match(page, /setInterval\(function \(\) \{ if \(!document\.hidden\) loadFx\(\); \}, 60000\)/, 'refreshed every minute');
 console.log('rate sources ok');
 
 // 전일 대비 on the page, per 100엔
