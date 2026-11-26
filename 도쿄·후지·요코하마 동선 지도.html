@@ -38,7 +38,7 @@
 </section>
 <section class="fx-bar" id="fx" aria-label="엔화 환율" hidden>
   <span class="nearby-lbl">환율</span>
-  <span class="fx-rate"><b id="fx-rate"></b><span class="fx-at" id="fx-at"></span></span>
+  <span class="fx-rate"><b id="fx-rate"></b><span class="fx-chg" id="fx-chg" hidden></span><span class="fx-at" id="fx-at"></span></span>
   <label class="fx-calc"><span aria-hidden="true">¥</span><input id="fx-yen" type="text" inputmode="numeric" autocomplete="off" placeholder="엔화 금액" aria-label="엔화 금액"><output id="fx-won" for="fx-yen" aria-live="polite"></output></label>
 </section>
 <section aria-labelledby="h-ov">
@@ -1679,15 +1679,36 @@
   }
   // ── 엔화 환율: /api/rate (won per yen, edge-cached 5 min); a nicety like the weather, so the bar stays hidden until a rate arrives ──
   var fxRate = 0;
+  var fxPrev = null; // the previous day's rate from the same source, or null when it has none
   var fxAt = 0;
+  var fxDaily = false; // a once-a-day rate: show its date, not a clock time
   var fxBusy = false;
   function wonText(yenAmount, rate) { return Math.round(yenAmount * rate).toLocaleString('ko-KR') + '원'; }
+  function won2(v) { return v.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  // 전일 대비, per 100엔: up (red) / down (blue) / flat, as Korean quote boards colour them
+  function fxChange(rate, prev) {
+    if (!(prev > 0)) return null;
+    var diff = Math.round((rate - prev) * 10000) / 100;
+    var pct = Math.round((rate / prev - 1) * 10000) / 100;
+    if (!diff) return { dir: 'flat', word: '보합', mark: '-', text: '0.00원 (0.00%)' };
+    var up = diff > 0;
+    return { dir: up ? 'up' : 'down', word: up ? '상승' : '하락', mark: up ? '▲' : '▼',
+      text: won2(Math.abs(diff)) + '원 (' + (up ? '+' : '−') + won2(Math.abs(pct)) + '%)' };
+  }
   function renderFx() {
-    document.getElementById('fx-rate').textContent = '100엔 = ' + (fxRate * 100).toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '원';
+    document.getElementById('fx-rate').textContent = '100엔 = ' + won2(fxRate * 100) + '원';
+    var chg = fxChange(fxRate, fxPrev);
+    var chgEl = document.getElementById('fx-chg');
+    chgEl.hidden = !chg;
+    if (chg) {
+      chgEl.dataset.dir = chg.dir;
+      chgEl.title = '전일 대비 ' + chg.word;
+      chgEl.innerHTML = '<span class="fx-chg-lbl">전일 대비</span><span class="sr"> ' + chg.word + '</span><span aria-hidden="true">' + chg.mark + '</span> ' + chg.text;
+    }
     var at = {};
     new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
       .formatToParts(fxAt).forEach(function (part) { at[part.type] = part.value; });
-    document.getElementById('fx-at').textContent = at.month + '/' + at.day + ' ' + at.hour + ':' + at.minute + ' 기준'; // Seoul and Tokyo share the clock
+    document.getElementById('fx-at').textContent = at.month + '/' + at.day + (fxDaily ? '' : ' ' + at.hour + ':' + at.minute) + ' 기준'; // Seoul and Tokyo share the clock
     var yenAmount = Number(document.getElementById('fx-yen').value.replace(/\D/g, ''));
     document.getElementById('fx-won').textContent = yenAmount ? '≈ ' + wonText(yenAmount, fxRate) : '';
     document.getElementById('fx').hidden = false;
@@ -1699,7 +1720,7 @@
     fxCheckedAt = Date.now();
     fetch('/api/rate', { signal: AbortSignal.timeout(15000) })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(function (q) { if (!(q.rate > 0)) throw new Error('bad rate'); fxRate = q.rate; fxAt = q.at; renderFx(); })
+      .then(function (q) { if (!(q.rate > 0)) throw new Error('bad rate'); fxRate = q.rate; fxPrev = q.prev; fxAt = q.at; fxDaily = !!q.daily; renderFx(); })
       // a rate already on screen stays; the next refresh tries again
       .catch(function (err) { console.error('rate failed', err); })
       .then(function () { fxBusy = false; });
