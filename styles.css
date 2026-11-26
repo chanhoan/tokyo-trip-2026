@@ -126,13 +126,14 @@ button { font: inherit; color: inherit; }
   .nearby-bar .nearby-chip { justify-content: center; gap: 4px; min-height: 44px; padding-inline: 3px; font-size: clamp(11px, 3.2vw, 13px); }
 }
 /* ── 엔화 환율 bar: rate + a one-field yen→won converter ── */
-.fx-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-block: -16px -10px; min-width: 0; }
+.fx-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-block: -14px -8px; min-width: 0; }
 .fx-bar[hidden] { display: none; }
 .fx-rate { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; min-width: 0; }
 .fx-chg { font: 600 13px var(--font-mono); white-space: nowrap; color: var(--muted); }
 .fx-chg[hidden] { display: none; }
-.fx-chg[data-dir="up"] { color: var(--fx-up); }
-.fx-chg[data-dir="down"] { color: var(--fx-down); }
+/* 상승 red, 하락 blue: the rate and its change both take the colour */
+.fx-bar[data-dir="up"] :is(#fx-rate, .fx-chg) { color: var(--fx-up); }
+.fx-bar[data-dir="down"] :is(#fx-rate, .fx-chg) { color: var(--fx-down); }
 .fx-chg-lbl { margin-right: 4px; font: 500 12px var(--font-body); color: var(--muted); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .fx-rate b { font: 600 15px var(--font-mono); white-space: nowrap; }

@@ -47,6 +47,7 @@ assert.deepEqual({ ...ctx.fxChange(9.0913, 9.1234) }, { dir: 'down', word: '하�
 assert.equal(ctx.fxChange(9.12341, 9.1234).dir, 'flat', 'less than 0.01원 per 100엔 is 보합');
 assert.equal(ctx.fxChange(9.1, null), null);
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
-assert.match(css, /\.fx-chg\[data-dir="up"\] \{ color: var\(--fx-up\); \}/);
+assert.match(css, /\.fx-bar\[data-dir="up"\] :is\(#fx-rate, \.fx-chg\) \{ color: var\(--fx-up\); \}/);
+assert.ok(html.indexOf('class="fx-bar"') < html.indexOf('class="nearby-bar"'), '환율 sits above 지금 근처');
 assert.match(css, /--fx-up: #d0112b; --fx-down: #1a5fd0;/, '상승 red, 하락 blue');
 console.log('rate change ok');
