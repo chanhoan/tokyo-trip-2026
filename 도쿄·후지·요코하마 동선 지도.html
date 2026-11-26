@@ -1677,7 +1677,7 @@
       .catch(function (err) { console.error('weather failed', err); weatherFailed = !weather; weatherAt = 0; })
       .then(function () { renderWeather(); renderTimeline(); });
   }
-  // ── 엔화 환율: /api/rate (won per yen, edge-cached 5 min); a nicety like the weather, so the bar stays hidden until a rate arrives ──
+  // ── 엔화 환율: /api/rate (won per yen, fetched live, never cached); a nicety like the weather, so the bar stays hidden until a rate arrives ──
   var fxRate = 0;
   var fxPrev = null; // the previous day's rate from the same source, or null when it has none
   var fxAt = 0;
@@ -1718,7 +1718,7 @@
     if (fxBusy) return;
     fxBusy = true;
     fxCheckedAt = Date.now();
-    fetch('/api/rate', { signal: AbortSignal.timeout(15000) })
+    fetch('/api/rate', { cache: 'no-store', signal: AbortSignal.timeout(15000) })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (q) { if (!(q.rate > 0)) throw new Error('bad rate'); fxRate = q.rate; fxPrev = q.prev; fxAt = q.at; fxDaily = !!q.daily; renderFx(); })
       // a rate already on screen stays; the next refresh tries again
@@ -1889,9 +1889,9 @@
   loadWeather();
   document.addEventListener('visibilitychange', function () { if (!document.hidden && Date.now() - weatherAt > 3600000) loadWeather(); }); // forecasts move slowly: once an hour at most
   loadFx();
-  // the rate moves through the day: every 5 minutes while the tab is looked at, and right away when it comes back after that
-  setInterval(function () { if (!document.hidden) loadFx(); }, 300000);
-  document.addEventListener('visibilitychange', function () { if (!document.hidden && Date.now() - fxCheckedAt > 300000) loadFx(); });
+  // live on open, then every minute while the tab is looked at, and right away when it comes back after a minute away
+  setInterval(function () { if (!document.hidden) loadFx(); }, 60000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && Date.now() - fxCheckedAt > 60000) loadFx(); });
   autoStart = !fromHash();
   current = fromHash() || today();
   render();

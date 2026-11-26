@@ -1,5 +1,6 @@
 // 엔화 환율: won per 1 yen, with the previous day's rate for 전일 대비. Every source is free and needs no key.
-// Fetched here, not in the browser: Yahoo sends no CORS headers, and the edge cache spares the sources.
+// Fetched here, not in the browser: Yahoo sends no CORS headers. Nothing is cached, so opening the page asks the source afresh;
+// Yahoo's quote itself trails the market by a minute or two, and five travellers polling once a minute is no load for it.
 // Each source gives today and its own previous rate, so the change never compares two different feeds.
 // shortcut: Yahoo's chart endpoint is unofficial; if it starts refusing, the daily sources keep the page going.
 const DAY = 86400000;
@@ -53,11 +54,7 @@ export async function fetchRate(get = fetch, now = Date.now()) {
 
 export default async function handler(req, res) {
   const q = await fetchRate();
-  if (!q) {
-    res.setHeader('Cache-Control', 'no-store');
-    return res.status(502).json({ error: '환율을 불러오지 못했어요.' });
-  }
-  // five minutes at the edge, so the whole group shares one lookup
-  res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+  res.setHeader('Cache-Control', 'no-store'); // a cached rate was up to 15 minutes old by the time the page showed it
+  if (!q) return res.status(502).json({ error: '환율을 불러오지 못했어요.' });
   res.status(200).json(q);
 }
