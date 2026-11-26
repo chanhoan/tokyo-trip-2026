@@ -177,7 +177,7 @@
     <p class="note">체크인 시간과 짐 보관 가능 여부는 호스트에게 확인하세요.</p>
   </div>
 </section>
-<p class="note">날씨 예보: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0)<br>환율: Yahoo Finance, <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">ExchangeRate-API</a> · 참고용 시세로, 실제 환전·카드 결제 금액과는 달라요</p>
+<p class="note">날씨 예보: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0)<br>환율: Yahoo Finance, <a href="https://frankfurter.dev" target="_blank" rel="noopener">Frankfurter</a>(ECB), <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">ExchangeRate-API</a> · 참고용 시세로, 실제 환전·카드 결제 금액과는 달라요</p>
 </div>
 <dialog id="place-dialog" class="place-dialog" lang="ko" aria-labelledby="place-title">
   <!-- autofocus target: showModal() would otherwise focus the first button and draw the focus ring -->
@@ -1702,7 +1702,6 @@
     chgEl.hidden = !chg;
     document.getElementById('fx').dataset.dir = chg ? chg.dir : '';
     if (chg) {
-      chgEl.dataset.dir = chg.dir;
       chgEl.title = '전일 대비 ' + chg.word;
       chgEl.innerHTML = '<span class="fx-chg-lbl">전일 대비</span><span class="sr"> ' + chg.word + '</span><span aria-hidden="true">' + chg.mark + '</span> ' + chg.text;
     }

@@ -129,14 +129,13 @@ button { font: inherit; color: inherit; }
 .fx-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-block: -14px -8px; min-width: 0; }
 .fx-bar[hidden] { display: none; }
 .fx-rate { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; min-width: 0; }
+.fx-rate b { font: 600 15px var(--font-mono); white-space: nowrap; }
 .fx-chg { font: 600 13px var(--font-mono); white-space: nowrap; color: var(--muted); }
-.fx-chg[hidden] { display: none; }
 /* 상승 red, 하락 blue: the rate and its change both take the colour */
 .fx-bar[data-dir="up"] :is(#fx-rate, .fx-chg) { color: var(--fx-up); }
 .fx-bar[data-dir="down"] :is(#fx-rate, .fx-chg) { color: var(--fx-down); }
 .fx-chg-lbl { margin-right: 4px; font: 500 12px var(--font-body); color: var(--muted); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.fx-rate b { font: 600 15px var(--font-mono); white-space: nowrap; }
 .fx-at { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .fx-calc { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 999px; background: var(--card); font-family: var(--font-mono); font-size: 14px; }
 .fx-calc:focus-within { border-color: var(--ink); }
